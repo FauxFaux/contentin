@@ -27,6 +27,47 @@ enum FileType {
     Other,
 }
 
+fn read_octal(bytes: &[u8]) -> Option<u32> {
+    let mut start = 0;
+    while start < bytes.len() && b' ' == bytes[start] {
+        start += 1;
+    }
+
+    let mut end = bytes.len() - 1;
+    while end > start && (b' ' == bytes[end] || 0 == bytes[end]) {
+        end -= 1;
+    }
+
+    if let Ok(string) = std::str::from_utf8(&bytes[start..(end+1)]) {
+        if let Ok(val) = u32::from_str_radix(string, 8) {
+            return Some(val);
+        }
+    }
+    None
+}
+
+fn is_probably_tar(header: &[u8]) -> bool {
+    if header.len() < 512 {
+        return false;
+    }
+
+    if let Some(checksum) = read_octal(&header[148..156]) {
+        let mut sum: u32 = (b' ' as u32) * 8;
+        for i in 0..148 {
+            sum += header[i] as u32;
+        }
+        for i in 156..512 {
+            sum += header[i] as u32;
+        }
+
+        if checksum == sum {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 fn identify<'a>(fd: &mut Box<io::BufRead + 'a>) -> io::Result<FileType> {
     let header = fd.fill_buf()?;
     if header.len() >= 20
@@ -59,6 +100,8 @@ fn identify<'a>(fd: &mut Box<io::BufRead + 'a>) -> io::Result<FileType> {
         && b'z' == header[2] && b'X' == header[3]
         && b'Z' == header[4] && 0 == header[5] {
         Ok(FileType::Xz)
+    } else if is_probably_tar(header) {
+        Ok(FileType::Tar)
     } else {
         Ok(FileType::Other)
     }
@@ -70,7 +113,17 @@ fn plus<T: Clone>(vec: &Vec<T>, thing: T) -> Vec<T> {
     ret
 }
 
-fn count_bytes<'a>(mut fd: Box<io::BufRead + 'a>) -> io::Result<u64> {
+struct BoxReader<'a> {
+    fd: Box<io::BufRead + 'a>
+}
+
+impl<'a> io::Read for BoxReader<'a> {
+    fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
+        self.fd.read(&mut buf)
+    }
+}
+
+fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
     let mut block = [0u8; 4096];
     let mut count = 0u64;
     loop {
@@ -89,7 +142,7 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, path: Vec<String>, output: &OutputT
             let decoder = gzip::Decoder::new(fd)?;
             unpack(Box::new(io::BufReader::new(decoder)), path, output)
         },
-        FileType::Ar => {
+        FileType::Ar if path.last().unwrap().ends_with(".deb") => {
             let mut decoder = ar::Archive::new(fd);
             while let Some(entry) = decoder.next_entry() {
                 let entry = entry?;
@@ -111,20 +164,29 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, path: Vec<String>, output: &OutputT
             unpack(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd))), path, output)
         },
         FileType::Zip => {
-            let mut angry = io::BufReader::new(fd);
-            loop {
-                let mut entry = zip::read::read_single(&mut angry)?;
+            let mut angry = BoxReader { fd };
+            while let Some(mut entry) = zip::read::read_single(&mut angry)? {
                 let new_path = plus(&path, (&*entry.name).to_string());
                 let reader = entry.get_reader();
-                unpack(Box::new(io::BufReader::new(reader)), new_path, output)?;
+                let unpacked = unpack(Box::new(io::BufReader::new(reader)), new_path, output);
+                if let Err(e) = unpacked {
+                    if e.kind() == io::ErrorKind::InvalidInput {
+                        break;
+                    } else {
+                        return Err(e)
+                    };
+                }
+            }
+            let bytes_at_end = count_bytes(&mut angry)?;
+            if 0 != bytes_at_end {
+                println!("{:?}: discarding trailing bytes: {}", path, bytes_at_end);
             }
             Ok(())
         },
-        FileType::Other => {
-            println!("{:?}: {}", path, count_bytes(fd)?);
+        other => {
+            println!("{:?}: {:?} {}", path, other, count_bytes(&mut BoxReader { fd })?);
             Ok(())
         },
-        x => panic!(format!("{:?}: {:?}", path, x))
     }
 }
 
