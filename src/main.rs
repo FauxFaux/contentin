@@ -2,6 +2,8 @@ extern crate ar;
 extern crate clap;
 extern crate libflate;
 extern crate tar;
+extern crate xz2;
+extern crate zip;
 
 use std::fs;
 use std::io;
@@ -104,7 +106,20 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, path: Vec<String>, output: &OutputT
                 unpack(Box::new(io::BufReader::new(entry)), new_path, output)?;
             }
             Ok(())
-        }
+        },
+        FileType::Xz => {
+            unpack(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd))), path, output)
+        },
+        FileType::Zip => {
+            let mut angry = io::BufReader::new(fd);
+            loop {
+                let mut entry = zip::read::read_single(&mut angry)?;
+                let new_path = plus(&path, (&*entry.name).to_string());
+                let reader = entry.get_reader();
+                unpack(Box::new(io::BufReader::new(reader)), new_path, output)?;
+            }
+            Ok(())
+        },
         FileType::Other => {
             println!("{:?}: {}", path, count_bytes(fd)?);
             Ok(())
