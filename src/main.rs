@@ -212,6 +212,9 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<()
                 |fd| gzip::Decoder::new(fd).map(
                     |dec| Box::new(io::BufReader::new(dec)) as Box<io::BufRead>))
         },
+        FileType::Xz => {
+            unpack(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd))), output)
+        },
         FileType::Ar if output.path.value.ends_with(".deb") => {
             let mut decoder = ar::Archive::new(fd);
             while let Some(entry) = decoder.next_entry() {
@@ -229,9 +232,6 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<()
                 unpack(Box::new(io::BufReader::new(entry)), &new_output)?;
             }
             Ok(())
-        },
-        FileType::Xz => {
-            unpack(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd))), output)
         },
         FileType::Zip => {
             let mut angry = BoxReader { fd };
