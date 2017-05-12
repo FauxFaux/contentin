@@ -200,6 +200,7 @@ where F: FnOnce(Box<io::BufRead + 'a>) -> io::Result<Box<io::BufRead + 'a>>
             output.warn(format!(
                     "thought we could unpack '{:?}' but we couldn't: {}",
                     output.path, e));
+            temp.seek(io::SeekFrom::Start(0))?;
             output.raw(temp)
         }
     }
@@ -213,7 +214,8 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<()
                     |dec| Box::new(io::BufReader::new(dec)) as Box<io::BufRead>))
         },
         FileType::Xz => {
-            unpack(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd))), output)
+            unpack_or_raw(fd, output,
+                |fd| Ok(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd)))))
         },
         FileType::Ar if output.path.value.ends_with(".deb") => {
             let mut decoder = ar::Archive::new(fd);
