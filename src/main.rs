@@ -2,6 +2,7 @@ extern crate ar;
 extern crate clap;
 extern crate libflate;
 extern crate tar;
+extern crate tempfile;
 extern crate xz2;
 extern crate zip;
 
@@ -12,8 +13,22 @@ use std::vec::Vec;
 use clap::{Arg, App};
 
 use libflate::gzip;
+use tempfile::tempfile;
+
+// magic:
+use std::io::Seek;
 
 struct OutputTo {
+}
+
+impl OutputTo {
+    fn warn(&self, msg: String) {
+        println!("TODO: {}", msg);
+    }
+
+    fn raw(&self, file: fs::File) -> io::Result<()> {
+        unimplemented!();
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -136,11 +151,35 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
     Ok(count)
 }
 
+fn unpack_or_raw<'a, F>(
+    fd: Box<io::BufRead + 'a>,
+    path: Vec<String>,
+    output: &OutputTo,
+    fun: F) -> io::Result<()>
+where F: FnOnce(Box<io::BufRead + 'a>) -> io::Result<Box<io::BufRead + 'a>>
+{
+    let mut temp = tempfile()?;
+
+    match fun(fd).map(|stream| io::copy(&mut BoxReader { fd: stream }, &mut temp)) {
+        Ok(_) => {
+            temp.seek(io::SeekFrom::Start(0))?;
+            unpack(Box::new(io::BufReader::new(temp)), path, output)
+        },
+        Err(e) => {
+            output.warn(format!(
+                    "thought we could unpack '{:?}' but we couldn't: {}",
+                    path, e));
+            output.raw(temp)
+        }
+    }
+}
+
 fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, path: Vec<String>, output: &OutputTo) -> io::Result<()> {
     match identify(&mut fd)? {
         FileType::GZip => {
-            let decoder = gzip::Decoder::new(fd)?;
-            unpack(Box::new(io::BufReader::new(decoder)), path, output)
+            unpack_or_raw(fd, path, output,
+                |fd| gzip::Decoder::new(fd).map(
+                    |dec| Box::new(io::BufReader::new(dec)) as Box<io::BufRead>))
         },
         FileType::Ar if path.last().unwrap().ends_with(".deb") => {
             let mut decoder = ar::Archive::new(fd);
