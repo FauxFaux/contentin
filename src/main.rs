@@ -8,6 +8,7 @@ extern crate zip;
 
 use std::fs;
 use std::io;
+use std::rc::Rc;
 use std::vec::Vec;
 
 use clap::{Arg, App};
@@ -18,7 +19,30 @@ use tempfile::tempfile;
 // magic:
 use std::io::Seek;
 
+#[derive(Debug)]
+struct Node<T> {
+    next: Option<Rc<Node<T>>>,
+    value: T,
+}
+
+impl<T> Node<T> {
+    fn head(obj: T) -> Rc<Node<T>> {
+        Rc::new(Node {
+            next: None,
+            value: obj,
+        })
+    }
+
+    fn plus(what: &Rc<Node<T>>, obj: T) -> Rc<Node<T>> {
+        Rc::new(Node {
+            next: Some(what.clone()),
+            value: obj
+        })
+    }
+}
+
 struct OutputTo {
+    path: Rc<Node<String>>,
 }
 
 impl OutputTo {
@@ -28,6 +52,14 @@ impl OutputTo {
 
     fn raw(&self, file: fs::File) -> io::Result<()> {
         unimplemented!();
+    }
+}
+
+impl OutputTo {
+    fn with_path(&self, path: String) -> OutputTo {
+        OutputTo {
+            path: Node::plus(&self.path, path)
+        }
     }
 }
 
@@ -153,7 +185,6 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
 
 fn unpack_or_raw<'a, F>(
     fd: Box<io::BufRead + 'a>,
-    path: Vec<String>,
     output: &OutputTo,
     fun: F) -> io::Result<()>
 where F: FnOnce(Box<io::BufRead + 'a>) -> io::Result<Box<io::BufRead + 'a>>
@@ -163,30 +194,30 @@ where F: FnOnce(Box<io::BufRead + 'a>) -> io::Result<Box<io::BufRead + 'a>>
     match fun(fd).map(|stream| io::copy(&mut BoxReader { fd: stream }, &mut temp)) {
         Ok(_) => {
             temp.seek(io::SeekFrom::Start(0))?;
-            unpack(Box::new(io::BufReader::new(temp)), path, output)
+            unpack(Box::new(io::BufReader::new(temp)), output)
         },
         Err(e) => {
             output.warn(format!(
                     "thought we could unpack '{:?}' but we couldn't: {}",
-                    path, e));
+                    output.path, e));
             output.raw(temp)
         }
     }
 }
 
-fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, path: Vec<String>, output: &OutputTo) -> io::Result<()> {
+fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<()> {
     match identify(&mut fd)? {
         FileType::GZip => {
-            unpack_or_raw(fd, path, output,
+            unpack_or_raw(fd, output,
                 |fd| gzip::Decoder::new(fd).map(
                     |dec| Box::new(io::BufReader::new(dec)) as Box<io::BufRead>))
         },
-        FileType::Ar if path.last().unwrap().ends_with(".deb") => {
+        FileType::Ar if output.path.value.ends_with(".deb") => {
             let mut decoder = ar::Archive::new(fd);
             while let Some(entry) = decoder.next_entry() {
                 let entry = entry?;
-                let new_path = plus(&path, entry.header().identifier().to_string());
-                unpack(Box::new(io::BufReader::new(entry)), new_path, output)?;
+                let new_output = output.with_path(entry.header().identifier().to_string());
+                unpack(Box::new(io::BufReader::new(entry)), &new_output)?;
             }
             Ok(())
         },
@@ -194,20 +225,20 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, path: Vec<String>, output: &OutputT
             let mut decoder = tar::Archive::new(fd);
             for entry in decoder.entries()? {
                 let entry = entry?;
-                let new_path = plus(&path, entry.path()?.to_str().expect("valid utf-8").to_string());
-                unpack(Box::new(io::BufReader::new(entry)), new_path, output)?;
+                let new_output = output.with_path(entry.path()?.to_str().expect("valid utf-8").to_string());
+                unpack(Box::new(io::BufReader::new(entry)), &new_output)?;
             }
             Ok(())
         },
         FileType::Xz => {
-            unpack(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd))), path, output)
+            unpack(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd))), output)
         },
         FileType::Zip => {
             let mut angry = BoxReader { fd };
             while let Some(mut entry) = zip::read::read_single(&mut angry)? {
-                let new_path = plus(&path, (&*entry.name).to_string());
+                let new_output = output.with_path((&*entry.name).to_string());
                 let reader = entry.get_reader();
-                let unpacked = unpack(Box::new(io::BufReader::new(reader)), new_path, output);
+                let unpacked = unpack(Box::new(io::BufReader::new(reader)), &new_output);
                 if let Err(e) = unpacked {
                     if e.kind() == io::ErrorKind::InvalidInput {
                         break;
@@ -218,12 +249,12 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, path: Vec<String>, output: &OutputT
             }
             let bytes_at_end = count_bytes(&mut angry)?;
             if 0 != bytes_at_end {
-                println!("{:?}: discarding trailing bytes: {}", path, bytes_at_end);
+                println!("{:?}: discarding trailing bytes: {}", output.path, bytes_at_end);
             }
             Ok(())
         },
         other => {
-            println!("{:?}: {:?} {}", path, other, count_bytes(&mut BoxReader { fd })?);
+            println!("{:?}: {:?} {}", output.path, other, count_bytes(&mut BoxReader { fd })?);
             Ok(())
         },
     }
@@ -239,11 +270,12 @@ fn main() {
                          .required(true)
                          .multiple(true))
                     .get_matches();
-    let output = OutputTo {};
     for path in matches.values_of("INPUT").unwrap() {
         let file = fs::File::open(path).unwrap();
         let read = io::BufReader::new(file);
-        unpack(Box::new(read), vec![path.to_string()], &output).unwrap();
+        unpack(Box::new(read), &OutputTo {
+            path: Node::head(path.to_string())
+        }).unwrap();
     }
 }
 
