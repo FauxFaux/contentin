@@ -72,7 +72,7 @@ impl OutputTo {
             atime: meta.accessed().map(simple_time_sys)?,
             mtime: meta.modified().map(simple_time_sys)?,
             ctime: simple_time_ctime(&meta),
-            btime: meta.created().map(simple_time_sys)?,
+            btime: simple_time_btime(&meta)?,
         })
     }
 
@@ -137,6 +137,15 @@ fn simple_time_sys(val: time::SystemTime) -> u64 {
 fn simple_time_tm(val: crates_time::Tm) -> u64 {
     let timespec = val.to_timespec();
     simple_time(time::Duration::new(timespec.sec as u64, timespec.nsec as u32))
+}
+
+fn simple_time_btime(val: &fs::Metadata) -> io::Result<u64> {
+    match val.created() {
+        Ok(time) => Ok(simple_time_sys(time)),
+        // "Other" is how "unsupported" is represented here; ew.
+        Err(ref e) if e.kind() == io::ErrorKind::Other => Ok(0),
+        Err(other) => Err(other),
+    }
 }
 
 // TODO: I really feel this should be exposed by Rust, without cfg.
