@@ -202,8 +202,11 @@ fn identify<'a>(fd: &mut Box<io::BufRead + 'a>) -> io::Result<FileType> {
         && b'c' == header[4] && b'h' == header[5]
         && b'>' == header[6] && b'\n' == header[7] {
         Ok(FileType::Ar)
-    } else if header.len() > 3
-        && b'B' == header[0] && b'Z' == header[1] {
+    } else if header.len() > 40
+        && b'B' == header[0] && b'Z' == header[1]
+        && b'h' == header[2] && 0x31 == header[3]
+        && 0x41 == header[4] && 0x59 == header[5]
+        && 0x26 == header[6] {
         Ok(FileType::BZip2)
     } else if header.len() > 6
         && 0xfd == header[0] && b'7' == header[1]
