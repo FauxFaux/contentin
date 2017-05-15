@@ -21,6 +21,7 @@ use tempfile::tempfile;
 
 // magic:
 use std::io::Seek;
+use std::io::Write;
 
 #[derive(Debug)]
 struct Node<T> {
@@ -55,11 +56,26 @@ struct OutputTo {
 
 impl OutputTo {
     fn warn(&self, msg: String) {
-        println!("TODO: {}", msg);
+        writeln!(io::stderr(), "TODO: {}", msg).expect("stderr");
     }
 
-    fn raw<F: io::Read>(&self, file: F) -> io::Result<()> {
-        unimplemented!();
+    fn raw<F: io::Read>(&self, mut file: &mut F) -> io::Result<()> {
+        let stdout = io::stdout();
+        let mut stdout = stdout.lock();
+        writeln!(stdout, "{:?} {} {} {} {} {}",
+            self.path,
+            self.size,
+            self.atime, self.mtime, self.ctime, self.btime
+        )?;
+
+        io::copy(&mut file, &mut stdout).and_then(move |written|
+            if written != self.size {
+                Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    format!("expecting to write {} but wrote {}", self.size, written)))
+            } else {
+                Ok(())
+            })
     }
 }
 
@@ -76,9 +92,9 @@ impl OutputTo {
         })
     }
 
-    fn with_path(&self, path: String) -> OutputTo {
+    fn with_path(&self, path: &str) -> OutputTo {
         OutputTo {
-            path: Node::plus(&self.path, path),
+            path: Node::plus(&self.path, path.to_string()),
             size: 0,
             atime: 0,
             mtime: 0,
@@ -284,7 +300,7 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<St
             let mut decoder = ar::Archive::new(fd);
             while let Some(entry) = decoder.next_entry() {
                 let entry = entry?;
-                let new_output = output.with_path(entry.header().identifier().to_string());
+                let new_output = output.with_path(entry.header().identifier());
                 unpack(Box::new(io::BufReader::new(entry)), &new_output)?;
             }
             Ok(Status::Done)
@@ -293,7 +309,7 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<St
             let mut decoder = tar::Archive::new(fd);
             for entry in decoder.entries()? {
                 let entry = entry?;
-                let new_output = output.with_path(entry.path()?.to_str().expect("valid utf-8").to_string());
+                let new_output = output.with_path(entry.path()?.to_str().expect("valid utf-8"));
                 unpack(Box::new(io::BufReader::new(entry)), &new_output)?;
             }
             Ok(Status::Done)
@@ -304,9 +320,13 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<St
             let mut zip = zip::ZipArchive::new(temp)?;
 
             for i in 0..zip.len() {
+
+                // well, this has gone rather poorly
+                let mut new_output = output.with_path(zip.by_index(i)?.name());
+
                 let file_result = {
                     let entry = zip.by_index(i)?;
-                    let mut new_output = output.with_path((entry.name()).to_string());
+
                     new_output.size = entry.size();
                     new_output.mtime = simple_time_tm(entry.last_modified());
                     let reader = Box::new(io::BufReader::new(entry));
@@ -316,21 +336,48 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<St
                     Status::Done => (),
                     Status::Rewind => {
                         // TODO: update output? ? handling? ???
-                        output.raw(zip.by_index(i)?)?
+                        new_output.raw(&mut zip.by_index(i)?)?
                     },
                 };
             }
 
             Ok(Status::Done)
         },
-        other => {
-            println!("{:?}: {:?} {}", output.path, other, count_bytes(&mut BoxReader { fd })?);
-            Ok(Status::Done)
+
+        // TODO: unimplemented!()
+        _ => {
+            Ok(Status::Rewind)
         },
     }
 }
 
-fn main() {
+fn output_raw(file: &mut fs::File, output: &OutputTo) -> io::Result<()> {
+    file.seek(io::SeekFrom::Start(0))?;
+    output.raw(file)?;
+    Ok(())
+}
+
+fn process_real_path(path: &str) -> io::Result<()> {
+    let mut file = fs::File::open(path).unwrap();
+    let output = OutputTo::from_file(
+        path,
+        &file
+    )?;
+
+    let attempt = {
+        let read = io::BufReader::new(&file);
+        unpack(Box::new(read), &output)
+    };
+
+    match attempt {
+        Ok(Status::Done) => Ok(()),
+        Ok(Status::Rewind) => output_raw(&mut file, &output),
+        Err(e) => Err(e)
+    }
+}
+
+fn real_main() -> u8 {
+
     let matches = App::new("contentin")
                     .arg(Arg::with_name("to-tar")
                          .long("to-tar")
@@ -340,14 +387,20 @@ fn main() {
                          .required(true)
                          .multiple(true))
                     .get_matches();
+
     for path in matches.values_of("INPUT").unwrap() {
-        let file = fs::File::open(path).unwrap();
-        let output = OutputTo::from_file(
-            path,
-            &file
-        ).expect("input file metadata");
-        let read = io::BufReader::new(file);
-        assert_eq!(Status::Done, unpack(Box::new(read), &output).unwrap());
+        if let Err(e) = process_real_path(path) {
+            if let Err(_) = writeln!(io::stderr(), "fatal: processing '{}': {}", path, e) {
+                return 6;
+            }
+
+            return 4;
+        }
     }
+    return 0;
 }
 
+
+fn main() {
+    std::process::exit(real_main() as i32)
+}
