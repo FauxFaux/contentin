@@ -10,5 +10,5 @@ libflate = "0.1.5"
 tar = "0.4"
 tempfile = "2.1.5"
 xz2 = "0.1.3"
-zip = { path = "../zip-rs" }
+zip = "0.2.3"
 
