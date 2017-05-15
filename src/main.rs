@@ -29,7 +29,7 @@ struct Node<T> {
     value: T,
 }
 
-impl<T> Node<T> {
+impl<T: Clone> Node<T> {
     fn head(obj: T) -> Rc<Node<T>> {
         Rc::new(Node {
             next: None,
@@ -42,6 +42,21 @@ impl<T> Node<T> {
             next: Some(what.clone()),
             value: obj
         })
+    }
+
+    fn to_vec(&self) -> Vec<T> {
+        let mut ret = Vec::new();
+        let mut val = self;
+        loop {
+            ret.push(val.value.clone());
+            if let Some(ref next) = val.next {
+                val = next;
+            } else {
+                break;
+            }
+        }
+        ret.reverse();
+        ret
     }
 }
 
@@ -63,7 +78,7 @@ impl OutputTo {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
         writeln!(stdout, "{:?} {} {} {} {} {}",
-            self.path,
+            self.path.to_vec(),
             self.size,
             self.atime, self.mtime, self.ctime, self.btime
         )?;
