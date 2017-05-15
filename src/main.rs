@@ -3,11 +3,14 @@ extern crate clap;
 extern crate libflate;
 extern crate tar;
 extern crate tempfile;
+extern crate time as crates_time;
 extern crate xz2;
 extern crate zip;
 
 use std::fs;
 use std::io;
+use std::time;
+
 use std::rc::Rc;
 use std::vec::Vec;
 
@@ -43,6 +46,11 @@ impl<T> Node<T> {
 
 struct OutputTo {
     path: Rc<Node<String>>,
+    size: u64,
+    atime: u64,
+    mtime: u64,
+    ctime: u64,
+    btime: u64,
 }
 
 impl OutputTo {
@@ -56,9 +64,26 @@ impl OutputTo {
 }
 
 impl OutputTo {
+    fn from_file(path: &str, fd: &fs::File) -> io::Result<OutputTo> {
+        let meta = fd.metadata()?;
+        Ok(OutputTo {
+            path: Node::head(path.to_string()),
+            size: meta.len(),
+            atime: meta.accessed().map(simple_time_sys)?,
+            mtime: meta.modified().map(simple_time_sys)?,
+            ctime: simple_time_ctime(&meta),
+            btime: meta.created().map(simple_time_sys)?,
+        })
+    }
+
     fn with_path(&self, path: String) -> OutputTo {
         OutputTo {
-            path: Node::plus(&self.path, path)
+            path: Node::plus(&self.path, path),
+            size: 0,
+            atime: 0,
+            mtime: 0,
+            ctime: 0,
+            btime: 0,
         }
     }
 }
@@ -97,6 +122,38 @@ fn read_octal(bytes: &[u8]) -> Option<u32> {
         }
     }
     None
+}
+
+fn simple_time(dur: time::Duration) -> u64 {
+    dur.as_secs().checked_mul(1_000_000_000)
+        .map_or(0, |nanos| nanos + dur.subsec_nanos() as u64)
+}
+
+fn simple_time_sys(val: time::SystemTime) -> u64 {
+    val.duration_since(time::UNIX_EPOCH).map(simple_time).unwrap_or(0)
+}
+
+
+fn simple_time_tm(val: crates_time::Tm) -> u64 {
+    let timespec = val.to_timespec();
+    simple_time(time::Duration::new(timespec.sec as u64, timespec.nsec as u32))
+}
+
+// TODO: I really feel this should be exposed by Rust, without cfg.
+fn simple_time_ctime(val: &fs::Metadata) -> u64 {
+    #[cfg(linux)] {
+        use std::os::linux::fs::MetadataExt;
+        let ctime: i64 = val.st_ctime();
+        if ctime <= 0 {
+            0
+        } else {
+            ctime as u64
+        }
+    }
+
+    #[cfg(not(linux))] {
+        0
+    }
 }
 
 fn is_probably_tar(header: &[u8]) -> bool {
@@ -237,7 +294,9 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<St
             for i in 0..zip.len() {
                 let file_result = {
                     let entry = zip.by_index(i)?;
-                    let new_output = output.with_path((entry.name()).to_string());
+                    let mut new_output = output.with_path((entry.name()).to_string());
+                    new_output.size = entry.size();
+                    new_output.mtime = simple_time_tm(entry.last_modified());
                     let reader = Box::new(io::BufReader::new(entry));
                     unpack(reader, &new_output)?
                 };
@@ -271,10 +330,12 @@ fn main() {
                     .get_matches();
     for path in matches.values_of("INPUT").unwrap() {
         let file = fs::File::open(path).unwrap();
+        let output = OutputTo::from_file(
+            path,
+            &file
+        ).expect("input file metadata");
         let read = io::BufReader::new(file);
-        assert_eq!(Status::Done, unpack(Box::new(read), &OutputTo {
-            path: Node::head(path.to_string())
-        }).unwrap());
+        assert_eq!(Status::Done, unpack(Box::new(read), &output).unwrap());
     }
 }
 
