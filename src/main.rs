@@ -92,9 +92,7 @@ impl OutputTo {
                 Ok(())
             })
     }
-}
 
-impl OutputTo {
     fn from_file(path: &str, fd: &fs::File) -> io::Result<OutputTo> {
         let meta = fd.metadata()?;
         Ok(OutputTo {
@@ -218,7 +216,7 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
-fn identify<'a>(fd: &mut Box<io::BufRead + 'a>) -> io::Result<FileType> {
+fn identify<'a, T: io::BufRead + ?Sized>(fd: &mut Box<T>) -> io::Result<FileType> {
     let header = fd.fill_buf()?;
     if header.len() >= 20
         && 0x1f == header[0] && 0x8b == header[1] {
@@ -260,14 +258,11 @@ fn identify<'a>(fd: &mut Box<io::BufRead + 'a>) -> io::Result<FileType> {
     }
 }
 
-struct BoxReader<'a> {
-    fd: Box<io::BufRead + 'a>
+trait Tee: io::BufRead {
 }
 
-impl<'a> io::Read for BoxReader<'a> {
-    fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
-        self.fd.read(&mut buf)
-    }
+impl<T: io::Read> Tee for io::BufReader<T> {
+
 }
 
 fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
@@ -284,10 +279,10 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
 }
 
 fn unpack_or_raw<'a, F>(
-    fd: Box<io::BufRead + 'a>,
+    fd: Box<Tee + 'a>,
     output: &OutputTo,
     fun: F) -> io::Result<Status>
-where F: FnOnce(Box<io::BufRead + 'a>) -> io::Result<Box<io::BufRead + 'a>>
+where F: FnOnce(Box<Tee + 'a>) -> io::Result<Box<Tee + 'a>>
 {
     match fun(fd) {
         Ok(inner) => unpack(inner, output),
@@ -300,12 +295,12 @@ where F: FnOnce(Box<io::BufRead + 'a>) -> io::Result<Box<io::BufRead + 'a>>
     }
 }
 
-fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<Status> {
+fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
     match identify(&mut fd)? {
         FileType::GZip => {
             unpack_or_raw(fd, output,
                 |fd| gzip::Decoder::new(fd).map(
-                    |dec| Box::new(io::BufReader::new(dec)) as Box<io::BufRead>))
+                    |dec| Box::new(io::BufReader::new(dec)) as Box<Tee>))
         },
         FileType::Xz => {
             unpack_or_raw(fd, output,
@@ -331,7 +326,7 @@ fn unpack<'a>(mut fd: Box<io::BufRead + 'a>, output: &OutputTo) -> io::Result<St
         },
         FileType::Zip => {
             let mut temp = tempfile()?;
-            io::copy(&mut BoxReader { fd }, &mut temp)?;
+            io::copy(&mut fd, &mut temp)?;
             let mut zip = zip::ZipArchive::new(temp)?;
 
             for i in 0..zip.len() {
