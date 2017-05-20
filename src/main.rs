@@ -74,7 +74,7 @@ impl OutputTo {
         writeln!(io::stderr(), "TODO: {}", msg).expect("stderr");
     }
 
-    fn raw<F: io::Read>(&self, mut file: &mut F) -> io::Result<()> {
+    fn raw<F: io::Read + ?Sized>(&self, mut file: &mut F) -> io::Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
         writeln!(stdout, "{:?} {} {} {} {} {}",
@@ -260,7 +260,7 @@ fn identify<'a, T: io::BufRead + ?Sized>(fd: &mut T) -> io::Result<FileType> {
 
 trait Tee {
     fn normal(&mut self) -> &mut io::BufRead;
-    fn abort(&mut self) -> io::Result<&io::BufRead>;
+    fn abort(&mut self) -> io::Result<&mut io::BufRead>;
 }
 
 struct TempFileTee<'a> {
@@ -281,7 +281,7 @@ impl<'a> Tee for TempFileTee<'a> {
     fn normal(&mut self) -> &mut io::BufRead {
         &mut self.fp
     }
-    fn abort(&mut self) -> io::Result<&io::BufRead> {
+    fn abort(&mut self) -> io::Result<&mut io::BufRead> {
         unimplemented!();
     }
 }
@@ -306,7 +306,7 @@ impl<T> Tee for BufReaderTee<T>
         &mut self.fp
     }
 
-    fn abort(&mut self) -> io::Result<&io::BufRead> {
+    fn abort(&mut self) -> io::Result<&mut io::BufRead> {
         self.fp.seek(io::SeekFrom::Start(0))?;
         Ok(self.normal())
     }
@@ -324,34 +324,29 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
     }
     Ok(count)
 }
-//
-//fn unpack_or_raw<F>(
-//    fd: Box<Tee>,
-//    output: &OutputTo,
-//    fun: F) -> io::Result<Status>
-//where F: FnOnce(Box<Tee>) -> io::Result<Box<Tee>>
-//{
-//    match fun(fd) {
-//        Ok(inner) => unpack(inner.normal(), output),
-//        Err(e) => {
-//            output.warn(format!(
-//                    "thought we could unpack '{:?}' but we couldn't: {}",
-//                    output.path, e));
-//            Ok(Status::Rewind)
-//        }
-//    }
-//}
 
 fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
     match identify(fd.normal())? {
-//        FileType::GZip => {
-//            unpack_or_raw(fd, output,
-//                |fd| gzip::Decoder::new(fd).map(
-//                    |dec| Box::new(io::BufReader::new(dec)) as Box<Tee>))
-//        },
+        FileType::GZip => {
+            let process_decoded = match gzip::Decoder::new(fd.normal()) {
+                Ok(dec) => Ok(unpack(Box::new(TempFileTee::new(dec)?), output)?),
+                Err(e) => Err(e),
+            };
+
+            match process_decoded {
+                Ok(status) => Ok(status),
+                Err(e) => {
+                    output.warn(format!(
+                        "thought we could unpack '{:?}' but we couldn't: {}",
+                        output.path, e));
+                    output.raw(fd.abort()?)?;
+                    Ok(Status::Done)
+                }
+            }
+        },
 //        FileType::Xz => {
 //            unpack_or_raw(fd, output,
-//                |fd| Ok(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd)))))
+//                |fd| Ok(Box::new(TempFileTee::new(xz2::bufread::XzDecoder::new(fd)))))
 //        },
         FileType::Ar if output.path.value.ends_with(".deb") => {
             let mut decoder = ar::Archive::new(fd.normal());
