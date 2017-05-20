@@ -325,24 +325,30 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
     Ok(count)
 }
 
+fn unpack_or_raw<'a, 'b, F, T: 'b + io::Read>(mut fd: Box<Tee + 'a>, output: &OutputTo, f: F) -> io::Result<Status>
+where F: FnOnce(&'b mut io::BufRead) -> io::Result<T>
+{
+    let process_decoded = match f(fd.normal()) {
+        Ok(dec) => Ok(unpack(Box::new(TempFileTee::new(dec)?), output)?),
+        Err(e) => Err(e),
+    };
+
+    match process_decoded {
+        Ok(status) => Ok(status),
+        Err(e) => {
+            output.warn(format!(
+                "thought we could unpack '{:?}' but we couldn't: {}",
+                output.path, e));
+            output.raw(fd.abort()?)?;
+            Ok(Status::Done)
+        }
+    }
+}
+
 fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
     match identify(fd.normal())? {
         FileType::GZip => {
-            let process_decoded = match gzip::Decoder::new(fd.normal()) {
-                Ok(dec) => Ok(unpack(Box::new(TempFileTee::new(dec)?), output)?),
-                Err(e) => Err(e),
-            };
-
-            match process_decoded {
-                Ok(status) => Ok(status),
-                Err(e) => {
-                    output.warn(format!(
-                        "thought we could unpack '{:?}' but we couldn't: {}",
-                        output.path, e));
-                    output.raw(fd.abort()?)?;
-                    Ok(Status::Done)
-                }
-            }
+            unpack_or_raw(fd, output, move |han| gzip::Decoder::new(han))
         },
 //        FileType::Xz => {
 //            unpack_or_raw(fd, output,
