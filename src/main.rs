@@ -290,9 +290,8 @@ struct BufReaderTee<T> {
     fp: Box<T>,
 }
 
-impl<T> BufReaderTee<T> {
-    // TODO: return type?
-    fn new<U: io::Read>(from: U) -> BufReaderTee<io::BufReader<U>> {
+impl<U: io::Read> BufReaderTee<io::BufReader<U>> {
+    fn new(from: U) -> Self {
         BufReaderTee {
             fp: Box::new(io::BufReader::new(from))
         }
@@ -416,11 +415,7 @@ fn process_real_path(path: &str) -> io::Result<()> {
         &file
     )?;
 
-    let attempt = {
-//        let read = BufReaderTee::new::<BufReaderTee<io::BufReader<fs::File>>>(file);
-        let read = TempFileTee::new(&file)?;
-        unpack(Box::new(read), &output)
-    };
+    let attempt = unpack(Box::new(BufReaderTee::new(&file)), &output);
 
     match attempt {
         Ok(Status::Done) => Ok(()),
