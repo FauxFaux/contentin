@@ -216,7 +216,7 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
-fn identify<'a, T: io::BufRead + ?Sized>(fd: &mut Box<T>) -> io::Result<FileType> {
+fn identify<'a, T: io::BufRead + ?Sized>(fd: &mut T) -> io::Result<FileType> {
     let header = fd.fill_buf()?;
     if header.len() >= 20
         && 0x1f == header[0] && 0x8b == header[1] {
@@ -258,11 +258,58 @@ fn identify<'a, T: io::BufRead + ?Sized>(fd: &mut Box<T>) -> io::Result<FileType
     }
 }
 
-trait Tee: io::BufRead {
+trait Tee {
+    fn normal(&mut self) -> &mut io::BufRead;
+    fn abort(&mut self) -> io::Result<&io::BufRead>;
 }
 
-impl<T: io::Read> Tee for io::BufReader<T> {
+struct TempFileTee<'a> {
+    fp: Box<io::BufRead + 'a>,
+    tmp: fs::File,
+}
 
+impl<'a> TempFileTee<'a> {
+    fn new<U: 'a + io::Read>(from: U) -> io::Result<TempFileTee<'a>> {
+        Ok(TempFileTee {
+            fp: Box::new(io::BufReader::new(from)),
+            tmp: tempfile()?
+        })
+    }
+}
+
+impl<'a> Tee for TempFileTee<'a> {
+    fn normal(&mut self) -> &mut io::BufRead {
+        &mut self.fp
+    }
+    fn abort(&mut self) -> io::Result<&io::BufRead> {
+        unimplemented!();
+    }
+}
+
+struct BufReaderTee<T> {
+    fp: Box<T>,
+}
+
+impl<T> BufReaderTee<T> {
+    // TODO: return type?
+    fn new<U: io::Read>(from: U) -> BufReaderTee<io::BufReader<U>> {
+        BufReaderTee {
+            fp: Box::new(io::BufReader::new(from))
+        }
+    }
+}
+
+impl<T> Tee for BufReaderTee<T>
+    where T: io::BufRead + io::Seek
+{
+    fn normal(&mut self) -> &mut io::BufRead {
+        &mut self.fp
+    }
+
+    fn abort(&mut self) -> io::Result<&io::BufRead> {
+        self.fp.seek(io::SeekFrom::Start(0))?;
+        Ok(self.normal())
+    }
 }
 
 fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
@@ -277,56 +324,56 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
     }
     Ok(count)
 }
-
-fn unpack_or_raw<'a, F>(
-    fd: Box<Tee + 'a>,
-    output: &OutputTo,
-    fun: F) -> io::Result<Status>
-where F: FnOnce(Box<Tee + 'a>) -> io::Result<Box<Tee + 'a>>
-{
-    match fun(fd) {
-        Ok(inner) => unpack(inner, output),
-        Err(e) => {
-            output.warn(format!(
-                    "thought we could unpack '{:?}' but we couldn't: {}",
-                    output.path, e));
-            Ok(Status::Rewind)
-        }
-    }
-}
+//
+//fn unpack_or_raw<F>(
+//    fd: Box<Tee>,
+//    output: &OutputTo,
+//    fun: F) -> io::Result<Status>
+//where F: FnOnce(Box<Tee>) -> io::Result<Box<Tee>>
+//{
+//    match fun(fd) {
+//        Ok(inner) => unpack(inner.normal(), output),
+//        Err(e) => {
+//            output.warn(format!(
+//                    "thought we could unpack '{:?}' but we couldn't: {}",
+//                    output.path, e));
+//            Ok(Status::Rewind)
+//        }
+//    }
+//}
 
 fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
-    match identify(&mut fd)? {
-        FileType::GZip => {
-            unpack_or_raw(fd, output,
-                |fd| gzip::Decoder::new(fd).map(
-                    |dec| Box::new(io::BufReader::new(dec)) as Box<Tee>))
-        },
-        FileType::Xz => {
-            unpack_or_raw(fd, output,
-                |fd| Ok(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd)))))
-        },
+    match identify(fd.normal())? {
+//        FileType::GZip => {
+//            unpack_or_raw(fd, output,
+//                |fd| gzip::Decoder::new(fd).map(
+//                    |dec| Box::new(io::BufReader::new(dec)) as Box<Tee>))
+//        },
+//        FileType::Xz => {
+//            unpack_or_raw(fd, output,
+//                |fd| Ok(Box::new(io::BufReader::new(xz2::bufread::XzDecoder::new(fd)))))
+//        },
         FileType::Ar if output.path.value.ends_with(".deb") => {
-            let mut decoder = ar::Archive::new(fd);
+            let mut decoder = ar::Archive::new(fd.normal());
             while let Some(entry) = decoder.next_entry() {
                 let entry = entry?;
                 let new_output = output.with_path(entry.header().identifier());
-                unpack(Box::new(io::BufReader::new(entry)), &new_output)?;
+                unpack(Box::new(TempFileTee::new(entry)?), &new_output)?;
             }
             Ok(Status::Done)
         },
         FileType::Tar => {
-            let mut decoder = tar::Archive::new(fd);
+            let mut decoder = tar::Archive::new(fd.normal());
             for entry in decoder.entries()? {
                 let entry = entry?;
                 let new_output = output.with_path(entry.path()?.to_str().expect("valid utf-8"));
-                unpack(Box::new(io::BufReader::new(entry)), &new_output)?;
+                unpack(Box::new(TempFileTee::new(entry)?), &new_output)?;
             }
             Ok(Status::Done)
         },
         FileType::Zip => {
             let mut temp = tempfile()?;
-            io::copy(&mut fd, &mut temp)?;
+            io::copy(fd.normal(), &mut temp)?;
             let mut zip = zip::ZipArchive::new(temp)?;
 
             for i in 0..zip.len() {
@@ -339,7 +386,7 @@ fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
 
                     new_output.size = entry.size();
                     new_output.mtime = simple_time_tm(entry.last_modified());
-                    let reader = Box::new(io::BufReader::new(entry));
+                    let reader = Box::new(TempFileTee::new(entry)?);
                     unpack(reader, &new_output)?
                 };
                 match file_result {
@@ -375,7 +422,8 @@ fn process_real_path(path: &str) -> io::Result<()> {
     )?;
 
     let attempt = {
-        let read = io::BufReader::new(&file);
+//        let read = BufReaderTee::new::<BufReaderTee<io::BufReader<fs::File>>>(file);
+        let read = TempFileTee::new(&file)?;
         unpack(Box::new(read), &output)
     };
 
