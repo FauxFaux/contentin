@@ -128,12 +128,6 @@ enum FileType {
     Other,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Status {
-    Done,
-    Rewind,
-}
-
 fn read_octal(bytes: &[u8]) -> Option<u32> {
     let mut start = 0;
     while start < bytes.len() && b' ' == bytes[start] {
@@ -324,24 +318,10 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
     Ok(count)
 }
 
-fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
+fn unpack_or_die<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
     match identify(fd.normal())? {
         FileType::GZip => {
-            let process_decoded = match gzip::Decoder::new(fd.normal()) {
-                Ok(dec) => Ok(unpack(Box::new(TempFileTee::new(dec)?), output)?),
-                Err(e) => Err(e),
-            };
-
-            match process_decoded {
-                Ok(status) => Ok(status),
-                Err(e) => {
-                    output.warn(format!(
-                        "thought we could unpack '{:?}' but we couldn't: {}",
-                        output.path, e));
-                    output.raw(fd.abort()?)?;
-                    Ok(Status::Done)
-                }
-            }
+            unpack(Box::new(TempFileTee::new(gzip::Decoder::new(fd.normal())?)?), output)
         },
 //        FileType::Xz => {
 //            unpack_or_raw(fd, output,
@@ -354,7 +334,7 @@ fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
                 let new_output = output.with_path(entry.header().identifier());
                 unpack(Box::new(TempFileTee::new(entry)?), &new_output)?;
             }
-            Ok(Status::Done)
+            Ok(())
         },
         FileType::Tar => {
             let mut decoder = tar::Archive::new(fd.normal());
@@ -363,7 +343,7 @@ fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
                 let new_output = output.with_path(entry.path()?.to_str().expect("valid utf-8"));
                 unpack(Box::new(TempFileTee::new(entry)?), &new_output)?;
             }
-            Ok(Status::Done)
+            Ok(())
         },
         FileType::Zip => {
             let mut temp = tempfile()?;
@@ -375,30 +355,40 @@ fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<Status> {
                 // well, this has gone rather poorly
                 let mut new_output = output.with_path(zip.by_index(i)?.name());
 
-                let file_result = {
-                    let entry = zip.by_index(i)?;
+                let entry = zip.by_index(i)?;
 
-                    new_output.size = entry.size();
-                    new_output.mtime = simple_time_tm(entry.last_modified());
-                    let reader = Box::new(TempFileTee::new(entry)?);
-                    unpack(reader, &new_output)?
-                };
-                match file_result {
-                    Status::Done => (),
-                    Status::Rewind => {
-                        // TODO: update output? ? handling? ???
-                        new_output.raw(&mut zip.by_index(i)?)?
-                    },
-                };
+                new_output.size = entry.size();
+                new_output.mtime = simple_time_tm(entry.last_modified());
+                let reader = Box::new(TempFileTee::new(entry)?);
+                unpack(reader, &new_output)?;
             }
-
-            Ok(Status::Done)
+            Ok(())
         },
 
         // TODO: unimplemented!()
         _ => {
-            Ok(Status::Rewind)
+            Err(io::Error::new(io::ErrorKind::Other, "unrecognised format"))
         },
+    }
+}
+
+fn is_format_error(e: &io::Error) -> bool {
+//    io::ErrorKind::Other == e.kind()
+    panic!("don't know if {:?} is a format error", e)
+}
+
+fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
+    let res = unpack_or_die(fd, output);
+    match res {
+        Ok(status) => Ok(status),
+        Err(ref e) if is_format_error(e) => {
+            output.warn(format!(
+                "thought we could unpack '{:?}' but we couldn't: {}",
+                output.path, e));
+            output.raw(fd.abort()?)?;
+            Ok(())
+        },
+        Err(e) => Err(e),
     }
 }
 
@@ -409,19 +399,14 @@ fn output_raw(file: &mut fs::File, output: &OutputTo) -> io::Result<()> {
 }
 
 fn process_real_path(path: &str) -> io::Result<()> {
-    let mut file = fs::File::open(path).unwrap();
+    let mut file = fs::File::open(path)?;
     let output = OutputTo::from_file(
         path,
         &file
     )?;
 
-    let attempt = unpack(Box::new(BufReaderTee::new(&file)), &output);
-
-    match attempt {
-        Ok(Status::Done) => Ok(()),
-        Ok(Status::Rewind) => output_raw(&mut file, &output),
-        Err(e) => Err(e)
-    }
+    unpack(Box::new(BufReaderTee::new(&file)), &output)?;
+    Ok(())
 }
 
 fn real_main() -> u8 {
