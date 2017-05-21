@@ -7,6 +7,8 @@ extern crate time as crates_time;
 extern crate xz2;
 extern crate zip;
 
+use std::error;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::time;
@@ -318,17 +320,35 @@ fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
     Ok(count)
 }
 
-fn unpack_or_die<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
-    match identify(fd.normal())? {
+#[derive(Clone, Copy, Debug)]
+struct Rewind {
+}
+
+impl error::Error for Rewind {
+    fn description(&self) -> &str {
+        "rewind"
+    }
+}
+
+impl fmt::Display for Rewind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "rewind")
+    }
+}
+
+fn unpack_or_die<'a, T: ?Sized>(mut fd: &mut T, output: &OutputTo) -> io::Result<()>
+where T: io::BufRead
+{
+    match identify(fd)? {
         FileType::GZip => {
-            unpack(Box::new(TempFileTee::new(gzip::Decoder::new(fd.normal())?)?), output)
+            unpack(Box::new(TempFileTee::new(gzip::Decoder::new(fd)?)?), output)
         },
 //        FileType::Xz => {
 //            unpack_or_raw(fd, output,
 //                |fd| Ok(Box::new(TempFileTee::new(xz2::bufread::XzDecoder::new(fd)))))
 //        },
         FileType::Ar if output.path.value.ends_with(".deb") => {
-            let mut decoder = ar::Archive::new(fd.normal());
+            let mut decoder = ar::Archive::new(fd);
             while let Some(entry) = decoder.next_entry() {
                 let entry = entry?;
                 let new_output = output.with_path(entry.header().identifier());
@@ -337,7 +357,7 @@ fn unpack_or_die<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()>
             Ok(())
         },
         FileType::Tar => {
-            let mut decoder = tar::Archive::new(fd.normal());
+            let mut decoder = tar::Archive::new(fd);
             for entry in decoder.entries()? {
                 let entry = entry?;
                 let new_output = output.with_path(entry.path()?.to_str().expect("valid utf-8"));
@@ -347,7 +367,7 @@ fn unpack_or_die<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()>
         },
         FileType::Zip => {
             let mut temp = tempfile()?;
-            io::copy(fd.normal(), &mut temp)?;
+            io::copy(fd, &mut temp)?;
             let mut zip = zip::ZipArchive::new(temp)?;
 
             for i in 0..zip.len() {
@@ -367,19 +387,26 @@ fn unpack_or_die<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()>
 
         // TODO: unimplemented!()
         _ => {
-            Err(io::Error::new(io::ErrorKind::Other, "unrecognised format"))
+            Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
         },
     }
 }
 
 fn is_format_error(e: &io::Error) -> bool {
-//    io::ErrorKind::Other == e.kind()
-    panic!("don't know if {:?} is a format error", e)
+    if io::ErrorKind::Other == e.kind() {
+        if let Some(ref obj) = e.get_ref() {
+            let option: Option<&Rewind> = obj.downcast_ref();
+            if option.is_some() {
+                return true;
+            }
+        }
+    }
+
+    panic!("don't know if {:?} / {:?} is a format error", e, e.get_ref())
 }
 
 fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
-    let res = unpack_or_die(fd, output);
-    match res {
+    match unpack_or_die(fd.normal(), output) {
         Ok(status) => Ok(status),
         Err(ref e) if is_format_error(e) => {
             output.warn(format!(
@@ -392,14 +419,8 @@ fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
     }
 }
 
-fn output_raw(file: &mut fs::File, output: &OutputTo) -> io::Result<()> {
-    file.seek(io::SeekFrom::Start(0))?;
-    output.raw(file)?;
-    Ok(())
-}
-
 fn process_real_path(path: &str) -> io::Result<()> {
-    let mut file = fs::File::open(path)?;
+    let file = fs::File::open(path)?;
     let output = OutputTo::from_file(
         path,
         &file
