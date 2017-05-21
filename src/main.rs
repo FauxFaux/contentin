@@ -395,7 +395,7 @@ where T: io::BufRead
 fn is_format_error(e: &io::Error) -> bool {
     if io::ErrorKind::Other == e.kind() {
         if let Some(ref obj) = e.get_ref() {
-            if (obj.downcast_ref() as Option<&Rewind>).is_some() {
+            if obj.is::<Rewind>() {
                 return true;
             }
         }
