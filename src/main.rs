@@ -77,8 +77,8 @@ struct OutputTo<'a> {
 }
 
 impl<'a> OutputTo<'a> {
-    fn log<T: ?Sized>(&self, level: u8, msg: &T) -> io::Result<()>
-    where T: fmt::Display
+    fn log<T: fmt::Display, F>(&self, level: u8, msg: F) -> io::Result<()>
+    where F: FnOnce() -> T
     {
         if self.options.verbose < level {
             return Ok(());
@@ -91,7 +91,7 @@ impl<'a> OutputTo<'a> {
             _ => format!("v{}", level),
         };
 
-        writeln!(io::stderr(), "{}: {}", name, msg).map(|_|())
+        writeln!(io::stderr(), "{}: {}", name, msg()).map(|_|())
     }
 
     fn raw(&self, mut file: Box<Tee>) -> io::Result<()> {
@@ -424,7 +424,7 @@ impl fmt::Display for Rewind {
 
 fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()> {
     let identity = identify(&mut fd, output)?;
-    output.log(2, &format!("identified as {}", identity))?;
+    output.log(2, || format!("identified as {}", identity))?;
     match identity {
         FileType::GZip => {
             unpack(Box::new(TempFileTee::new(gzip::Decoder::new(fd)?)?), output)
@@ -499,7 +499,7 @@ fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
         if let Some(specific) = is_format_error(raw_error) {
             match specific {
                 FormatErrorType::Other => {
-                    output.log(1, &format!(
+                    output.log(1, || format!(
                         "thought we could unpack '{:?}' but we couldn't: {}",
                         output.path, raw_error));
                 },
