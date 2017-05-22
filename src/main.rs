@@ -445,7 +445,11 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
             let mut decoder = tar::Archive::new(fd);
             for entry in decoder.entries()? {
                 let entry = entry?;
-                let new_output = output.with_path(entry.path()?.to_str().expect("valid utf-8"));
+                let new_output = output.with_path(entry.path()?.to_str()
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
+                                      format!("tar path contains invalid utf-8: {:?}",
+                                              entry.path_bytes())))?);
+
                 unpack(Box::new(TempFileTee::new(entry)?), &new_output)?;
             }
             Ok(())
