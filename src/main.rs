@@ -204,7 +204,7 @@ fn simple_time_btime(val: &fs::Metadata) -> io::Result<u64> {
 
 // TODO: I really feel this should be exposed by Rust, without cfg.
 fn simple_time_ctime(val: &fs::Metadata) -> u64 {
-    #[cfg(linux)] {
+    #[cfg(target_os = "linux")] {
         use std::os::linux::fs::MetadataExt;
         let ctime: i64 = val.st_ctime();
         if ctime <= 0 {
@@ -214,7 +214,7 @@ fn simple_time_ctime(val: &fs::Metadata) -> u64 {
         }
     }
 
-    #[cfg(not(linux))] {
+    #[cfg(not(target_os="linux"))] {
         0
     }
 }
@@ -299,6 +299,8 @@ struct TempFileTee {
 
 impl TempFileTee {
     fn new<U: io::Read>(mut from: U) -> io::Result<TempFileTee> {
+        // TODO: take a size hint, and consider using memory, or shm,
+        // TODO: or take a temp file path, or..
         let mut tmp = tempfile()?;
 
         {
@@ -455,6 +457,7 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
             Ok(())
         },
         FileType::Zip => {
+            // TODO: teach Tee to expose its Seekable if it can, otherwise tempfile
             let mut temp = tempfile()?;
             io::copy(&mut fd, &mut temp)?;
             let mut zip = zip::ZipArchive::new(temp)?;
@@ -494,7 +497,7 @@ fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
         }
     }
 
-    panic!("don't know if {:?} / {:?} is a format error", e, e.get_ref())
+    panic!("don't know if {:?} / {:?} / {:?} is a format error", e, e.kind(), e.get_ref())
 }
 
 fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
