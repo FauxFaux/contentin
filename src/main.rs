@@ -77,8 +77,21 @@ struct OutputTo<'a> {
 }
 
 impl<'a> OutputTo<'a> {
-    fn warn(&self, msg: String) {
-        writeln!(io::stderr(), "TODO: {}", msg).expect("stderr");
+    fn log<T: ?Sized>(&self, level: u8, msg: &T) -> io::Result<()>
+    where T: fmt::Display
+    {
+        if self.options.verbose < level {
+            return Ok(());
+        }
+
+        let name = match level {
+            1 => "warn".to_string(),
+            2 => "info".to_string(),
+            3 => "debug".to_string(),
+            _ => format!("v{}", level),
+        };
+
+        writeln!(io::stderr(), "{}: {}", name, msg).map(|_|())
     }
 
     fn raw(&self, mut file: Box<Tee>) -> io::Result<()> {
@@ -138,6 +151,12 @@ enum FileType {
     BZip2,
     Xz,
     Other,
+}
+
+impl fmt::Display for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
 }
 
 fn read_octal(bytes: &[u8]) -> Option<u32> {
@@ -222,8 +241,13 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
-fn identify<'a>(fd: &mut Box<Tee>) -> io::Result<FileType> {
+fn identify<'a>(fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<FileType> {
     let header = fd.fill_buf()?;
+
+//    if header.len() >= 3 {
+//        output.log(3, &format!("{} {} {}", header[0], header[1], header[2]))?;
+//    }
+
     if header.len() >= 20
         && 0x1f == header[0] && 0x8b == header[1] {
         Ok(FileType::GZip)
@@ -399,7 +423,9 @@ impl fmt::Display for Rewind {
 }
 
 fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()> {
-    match identify(&mut fd)? {
+    let identity = identify(&mut fd, output)?;
+    output.log(2, &format!("identified as {}", identity))?;
+    match identity {
         FileType::GZip => {
             unpack(Box::new(TempFileTee::new(gzip::Decoder::new(fd)?)?), output)
         },
@@ -473,7 +499,7 @@ fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
         if let Some(specific) = is_format_error(raw_error) {
             match specific {
                 FormatErrorType::Other => {
-                    output.warn(format!(
+                    output.log(1, &format!(
                         "thought we could unpack '{:?}' but we couldn't: {}",
                         output.path, raw_error));
                 },
