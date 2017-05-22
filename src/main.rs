@@ -78,7 +78,7 @@ impl OutputTo {
     fn raw(&self, mut file: Box<Tee>) -> io::Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-        let size = file.len()?;
+        let size = file.len_and_reset()?;
         writeln!(stdout, "{:?} {} {} {} {} {}",
             self.path.to_vec(),
             size,
@@ -254,7 +254,7 @@ fn identify<'a>(fd: &mut Box<Tee>) -> io::Result<FileType> {
 
 trait Tee: io::BufRead {
     fn reset(&mut self) -> io::Result<()>;
-    fn len(&mut self) -> io::Result<u64>;
+    fn len_and_reset(&mut self) -> io::Result<u64>;
 }
 
 struct TempFileTee {
@@ -285,7 +285,7 @@ impl Tee for TempFileTee {
         self.tmp.seek(BEGINNING).map(|_| ())
     }
 
-    fn len(&mut self) -> io::Result<u64> {
+    fn len_and_reset(&mut self) -> io::Result<u64> {
         let len = self.tmp.seek(END)?;
         self.reset()?;
         Ok(len)
@@ -329,7 +329,7 @@ impl<T> Tee for BufReaderTee<T>
         self.fp.seek(io::SeekFrom::Start(0)).map(|_|())
     }
 
-    fn len(&mut self) -> io::Result<u64> {
+    fn len_and_reset(&mut self) -> io::Result<u64> {
         let len = self.fp.seek(END)?;
         self.reset()?;
         Ok(len)
