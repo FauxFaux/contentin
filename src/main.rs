@@ -64,7 +64,6 @@ impl<T: Clone> Node<T> {
 
 struct OutputTo {
     path: Rc<Node<String>>,
-    size: u64,
     atime: u64,
     mtime: u64,
     ctime: u64,
@@ -79,17 +78,18 @@ impl OutputTo {
     fn raw(&self, mut file: Box<Tee>) -> io::Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
+        let size = file.len()?;
         writeln!(stdout, "{:?} {} {} {} {} {}",
             self.path.to_vec(),
-            self.size,
+            size,
             self.atime, self.mtime, self.ctime, self.btime
         )?;
 
         io::copy(&mut file, &mut stdout).and_then(move |written|
-            if written != self.size {
+            if written != size {
                 Err(io::Error::new(
                     io::ErrorKind::UnexpectedEof,
-                    format!("expecting to write {} but wrote {}", self.size, written)))
+                    format!("expecting to write {} but wrote {}", size, written)))
             } else {
                 Ok(())
             })
@@ -99,7 +99,6 @@ impl OutputTo {
         let meta = fd.metadata()?;
         Ok(OutputTo {
             path: Node::head(path.to_string()),
-            size: meta.len(),
             atime: meta.accessed().map(simple_time_sys)?,
             mtime: meta.modified().map(simple_time_sys)?,
             ctime: simple_time_ctime(&meta),
@@ -110,7 +109,6 @@ impl OutputTo {
     fn with_path(&self, path: &str) -> OutputTo {
         OutputTo {
             path: Node::plus(&self.path, path.to_string()),
-            size: 0,
             atime: 0,
             mtime: 0,
             ctime: 0,
@@ -256,6 +254,7 @@ fn identify<'a>(fd: &mut Box<Tee>) -> io::Result<FileType> {
 
 trait Tee: io::BufRead {
     fn reset(&mut self) -> io::Result<()>;
+    fn len(&mut self) -> io::Result<u64>;
 }
 
 struct TempFileTee {
@@ -278,9 +277,18 @@ impl TempFileTee {
     }
 }
 
+const BEGINNING: io::SeekFrom = io::SeekFrom::Start(0);
+const END: io::SeekFrom = io::SeekFrom::End(0);
+
 impl Tee for TempFileTee {
     fn reset(&mut self) -> io::Result<()> {
-        self.tmp.seek(io::SeekFrom::Start(0)).map(|_| ())
+        self.tmp.seek(BEGINNING).map(|_| ())
+    }
+
+    fn len(&mut self) -> io::Result<u64> {
+        let len = self.tmp.seek(END)?;
+        self.reset()?;
+        Ok(len)
     }
 }
 
@@ -319,6 +327,12 @@ impl<T> Tee for BufReaderTee<T>
 {
     fn reset(&mut self) -> io::Result<()> {
         self.fp.seek(io::SeekFrom::Start(0)).map(|_|())
+    }
+
+    fn len(&mut self) -> io::Result<u64> {
+        let len = self.fp.seek(END)?;
+        self.reset()?;
+        Ok(len)
     }
 }
 
@@ -408,7 +422,6 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
 
                 let entry = zip.by_index(i)?;
 
-                new_output.size = entry.size();
                 new_output.mtime = simple_time_tm(entry.last_modified());
                 let reader = Box::new(TempFileTee::new(entry)?);
                 unpack(reader, &new_output)?;
@@ -423,11 +436,16 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
     }
 }
 
-fn is_format_error(e: &io::Error) -> bool {
+enum FormatErrorType {
+    Rewind,
+    Other,
+}
+
+fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
     if io::ErrorKind::Other == e.kind() {
         if let Some(ref obj) = e.get_ref() {
             if obj.is::<Rewind>() {
-                return true;
+                return Some(FormatErrorType::Rewind);
             }
         }
     }
@@ -436,18 +454,24 @@ fn is_format_error(e: &io::Error) -> bool {
 }
 
 fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
-    match unpack_or_die(&mut fd, output) {
-        Ok(status) => Ok(status),
-        Err(ref e) if is_format_error(e) => {
-            output.warn(format!(
-                "thought we could unpack '{:?}' but we couldn't: {}",
-                output.path, e));
-            fd.reset()?;
+    let res = unpack_or_die(&mut fd, output);
+    if let Err(ref raw_error) = res {
+        if let Some(specific) = is_format_error(raw_error) {
+            match specific {
+                FormatErrorType::Other => {
+                    output.warn(format!(
+                        "thought we could unpack '{:?}' but we couldn't: {}",
+                        output.path, raw_error));
+                },
+                FormatErrorType::Rewind => {},
+            }
+
             output.raw(fd)?;
-            Ok(())
-        },
-        Err(e) => Err(e),
+            return Ok(());
+        }
     }
+
+    res
 }
 
 fn process_real_path(path: &str) -> io::Result<()> {
