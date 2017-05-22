@@ -76,7 +76,7 @@ impl OutputTo {
         writeln!(io::stderr(), "TODO: {}", msg).expect("stderr");
     }
 
-    fn raw<F: io::Read + ?Sized>(&self, mut file: &mut F) -> io::Result<()> {
+    fn raw(&self, mut file: Box<io::BufRead>) -> io::Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
         writeln!(stdout, "{:?} {} {} {} {} {}",
@@ -212,7 +212,7 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
-fn identify<'a, T: io::BufRead + ?Sized>(fd: &mut T) -> io::Result<FileType> {
+fn identify<'a>(fd: &mut Box<io::BufRead>) -> io::Result<FileType> {
     let header = fd.fill_buf()?;
     if header.len() >= 20
         && 0x1f == header[0] && 0x8b == header[1] {
@@ -255,8 +255,8 @@ fn identify<'a, T: io::BufRead + ?Sized>(fd: &mut T) -> io::Result<FileType> {
 }
 
 trait Tee {
-    fn normal(&mut self) -> &mut io::BufRead;
-    fn abort(&mut self) -> io::Result<&mut io::BufRead>;
+    fn normal(&mut self) -> io::Result<Box<io::BufRead>>;
+    fn abort(&mut self) -> io::Result<Box<io::BufRead>>;
 }
 
 struct TempFileTee<'a> {
@@ -266,19 +266,25 @@ struct TempFileTee<'a> {
 
 impl<'a> TempFileTee<'a> {
     fn new<U: 'a + io::Read>(from: U) -> io::Result<TempFileTee<'a>> {
+        let tempfile = tempfile()?;
         Ok(TempFileTee {
             fp: Box::new(io::BufReader::new(from)),
-            tmp: tempfile()?
+            tmp: tempfile,
         })
     }
 }
 
 impl<'a> Tee for TempFileTee<'a> {
-    fn normal(&mut self) -> &mut io::BufRead {
-        &mut self.fp
+    fn normal(&mut self) -> io::Result<Box<io::BufRead>> {
+        {
+            let mut writer = io::BufWriter::new(&self.tmp);
+            io::copy(&mut self.fp, &mut writer)?;
+        }
+        self.abort()
     }
-    fn abort(&mut self) -> io::Result<&mut io::BufRead> {
-        unimplemented!();
+
+    fn abort(&mut self) -> io::Result<Box<io::BufRead + 'a>> {
+        Ok(Box::new(io::BufReader::new(&self.tmp)))
     }
 }
 
@@ -295,15 +301,15 @@ impl<U: io::Read> BufReaderTee<io::BufReader<U>> {
 }
 
 impl<T> Tee for BufReaderTee<T>
-    where T: io::BufRead + io::Seek
+    where T: io::BufRead + io::Seek + 'static
 {
-    fn normal(&mut self) -> &mut io::BufRead {
-        &mut self.fp
+    fn normal(&mut self) -> io::Result<Box<io::BufRead>> {
+        Ok(self.fp)
     }
 
-    fn abort(&mut self) -> io::Result<&mut io::BufRead> {
+    fn abort(&mut self) -> io::Result<Box<io::BufRead>> {
         self.fp.seek(io::SeekFrom::Start(0))?;
-        Ok(self.normal())
+        Ok(self.fp)
     }
 }
 
@@ -336,10 +342,8 @@ impl fmt::Display for Rewind {
     }
 }
 
-fn unpack_or_die<'a, T: ?Sized>(mut fd: &mut T, output: &OutputTo) -> io::Result<()>
-where T: io::BufRead
-{
-    match identify(fd)? {
+fn unpack_or_die<'a>(mut fd: Box<io::BufRead>, output: &OutputTo) -> io::Result<()> {
+    match identify(&mut fd)? {
         FileType::GZip => {
             unpack(Box::new(TempFileTee::new(gzip::Decoder::new(fd)?)?), output)
         },
@@ -367,7 +371,7 @@ where T: io::BufRead
         },
         FileType::Zip => {
             let mut temp = tempfile()?;
-            io::copy(fd, &mut temp)?;
+            io::copy(&mut fd, &mut temp)?;
             let mut zip = zip::ZipArchive::new(temp)?;
 
             for i in 0..zip.len() {
@@ -405,7 +409,7 @@ fn is_format_error(e: &io::Error) -> bool {
 }
 
 fn unpack<'a>(mut fd: Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
-    match unpack_or_die(fd.normal(), output) {
+    match unpack_or_die(fd.normal()?, output) {
         Ok(status) => Ok(status),
         Err(ref e) if is_format_error(e) => {
             output.warn(format!(
