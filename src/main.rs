@@ -62,7 +62,12 @@ impl<T: Clone> Node<T> {
     }
 }
 
-struct OutputTo {
+struct Options {
+
+}
+
+struct OutputTo<'a> {
+    options: &'a Options,
     path: Rc<Node<String>>,
     atime: u64,
     mtime: u64,
@@ -70,7 +75,7 @@ struct OutputTo {
     btime: u64,
 }
 
-impl OutputTo {
+impl<'a> OutputTo<'a> {
     fn warn(&self, msg: String) {
         writeln!(io::stderr(), "TODO: {}", msg).expect("stderr");
     }
@@ -95,9 +100,10 @@ impl OutputTo {
             })
     }
 
-    fn from_file(path: &str, fd: &fs::File) -> io::Result<OutputTo> {
+    fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> io::Result<OutputTo<'b>> {
         let meta = fd.metadata()?;
         Ok(OutputTo {
+            options,
             path: Node::head(path.to_string()),
             atime: meta.accessed().map(simple_time_sys)?,
             mtime: meta.modified().map(simple_time_sys)?,
@@ -108,6 +114,7 @@ impl OutputTo {
 
     fn with_path(&self, path: &str) -> OutputTo {
         OutputTo {
+            options: self.options,
             path: Node::plus(&self.path, path.to_string()),
             atime: 0,
             mtime: 0,
@@ -474,11 +481,12 @@ fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
     res
 }
 
-fn process_real_path(path: &str) -> io::Result<()> {
+fn process_real_path(path: &str, options: &Options) -> io::Result<()> {
     let file = fs::File::open(path)?;
     let output = OutputTo::from_file(
         path,
-        &file
+        &file,
+        &options,
     )?;
 
     unpack(Box::new(BufReaderTee::new(file)), &output)
@@ -496,8 +504,11 @@ fn real_main() -> u8 {
                          .multiple(true))
                     .get_matches();
 
+    let options = Options {
+    };
+
     for path in matches.values_of("INPUT").unwrap() {
-        if let Err(e) = process_real_path(path) {
+        if let Err(e) = process_real_path(path, &options) {
             if let Err(_) = writeln!(io::stderr(), "fatal: processing '{}': {}", path, e) {
                 return 6;
             }
