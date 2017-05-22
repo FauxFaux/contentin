@@ -63,7 +63,8 @@ impl<T: Clone> Node<T> {
 }
 
 struct Options {
-
+    list: bool,
+    verbose: u8,
 }
 
 struct OutputTo<'a> {
@@ -89,6 +90,10 @@ impl<'a> OutputTo<'a> {
             size,
             self.atime, self.mtime, self.ctime, self.btime
         )?;
+
+        if self.options.list {
+            return Ok(())
+        }
 
         io::copy(&mut file, &mut stdout).and_then(move |written|
             if written != size {
@@ -492,19 +497,33 @@ fn process_real_path(path: &str, options: &Options) -> io::Result<()> {
     unpack(Box::new(BufReaderTee::new(file)), &output)
 }
 
+fn must_fit(x: u64) -> u8 {
+    if x > std::u8::MAX as u64 {
+        panic!("too many something: {}", x);
+    }
+    x as u8
+}
+
 fn real_main() -> u8 {
 
     let matches = App::new("contentin")
-                    .arg(Arg::with_name("to-tar")
-                         .long("to-tar")
-                         .help("emit a tar file")
-                         .required(true))
+                    .arg(Arg::with_name("v")
+                        .short("v")
+                        .multiple(true)
+                        .help("Sets the level of verbosity (more for more)"))
+                    .arg(Arg::with_name("list")
+                        .short("t")
+                        .long("list")
+                        .help("Show headers only, not object content"))
                     .arg(Arg::with_name("INPUT")
                          .required(true)
+                        .help("File(s) to process")
                          .multiple(true))
                     .get_matches();
 
     let options = Options {
+        list: matches.is_present("list"),
+        verbose: must_fit(matches.occurrences_of("v")),
     };
 
     for path in matches.values_of("INPUT").unwrap() {
