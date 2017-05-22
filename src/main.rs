@@ -298,7 +298,7 @@ struct TempFileTee {
 }
 
 impl TempFileTee {
-    fn new<U: io::Read>(mut from: U) -> io::Result<TempFileTee> {
+    fn new<U: io::Read>(from: U) -> io::Result<TempFileTee> {
         // TODO: take a size hint, and consider using memory, or shm,
         // TODO: or take a temp file path, or..
         let mut tmp = tempfile()?;
@@ -392,20 +392,6 @@ impl<T> io::BufRead for BufReaderTee<T>
     fn consume(&mut self, amt: usize) {
         self.fp.consume(amt)
     }
-}
-
-
-fn count_bytes<'a, R: io::Read>(mut fd: &mut R) -> io::Result<u64> {
-    let mut block = [0u8; 4096];
-    let mut count = 0u64;
-    loop {
-        let found = fd.read(&mut block[..])?;
-        if 0 == found {
-            break;
-        }
-        count += found as u64;
-    }
-    Ok(count)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -508,7 +494,7 @@ fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
                 FormatErrorType::Other => {
                     output.log(1, || format!(
                         "thought we could unpack '{:?}' but we couldn't: {}",
-                        output.path, raw_error));
+                        output.path, raw_error))?;
                 },
                 FormatErrorType::Rewind => {},
             }
