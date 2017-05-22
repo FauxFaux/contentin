@@ -275,13 +275,15 @@ struct TempFileTee {
 
 impl TempFileTee {
     fn new<U: io::Read>(mut from: U) -> io::Result<TempFileTee> {
-        let tmp = tempfile()?;
+        let mut tmp = tempfile()?;
 
         {
             let mut reader = io::BufReader::new(from);
             let mut writer = io::BufWriter::new(&tmp);
             io::copy(&mut reader, &mut writer)?;
         }
+
+        tmp.seek(BEGINNING)?;
 
         Ok(TempFileTee {
             tmp: io::BufReader::new(tmp),
