@@ -5,6 +5,7 @@ authors = ["Chris West (Faux) <git@goeswhere.com>"]
 
 [dependencies]
 ar = "0.2.0"
+bzip2 = "0.3.2"
 clap = "2.23.3"
 libflate = "0.1.5"
 tar = "0.4"

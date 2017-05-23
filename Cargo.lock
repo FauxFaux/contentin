@@ -3,6 +3,7 @@ name = "contentin"
 version = "0.1.0"
 dependencies = [
  "ar 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bzip2 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.24.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libflate 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "tar 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",

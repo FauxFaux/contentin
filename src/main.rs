@@ -1,4 +1,5 @@
 extern crate ar;
+extern crate bzip2;
 extern crate clap;
 extern crate libflate;
 extern crate tar;
@@ -147,9 +148,9 @@ enum FileType {
     GZip,
     Zip,
     Tar,
-    Ar,
     BZip2,
     Xz,
+    Deb,
     Other,
 }
 
@@ -241,6 +242,8 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
+const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
+
 fn identify<'a>(fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<FileType> {
     let header = fd.fill_buf()?;
 
@@ -264,12 +267,10 @@ fn identify<'a>(fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<FileType> {
             (b' ' == header[262] && b' ' == header[263] && 0 == header[264])
         ) {
         Ok(FileType::Tar)
-    } else if header.len() > 8
-        && b'!' == header[0] && b'<' == header[1]
-        && b'a' == header[2] && b'r' == header[3]
-        && b'c' == header[4] && b'h' == header[5]
-        && b'>' == header[6] && b'\n' == header[7] {
-        Ok(FileType::Ar)
+    } else if header.len() > 70
+        && header[0..DEB_PREFIX.len()] == DEB_PREFIX[..]
+        && header[66..70] == b"`\n2."[..] {
+        Ok(FileType::Deb)
     } else if header.len() > 40
         && b'B' == header[0] && b'Z' == header[1]
         && b'h' == header[2] && 0x31 == header[3]
@@ -420,7 +421,10 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
         FileType::Xz => {
             unpack(Box::new(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?), output)
         },
-        FileType::Ar if output.path.value.ends_with(".deb") => {
+        FileType::BZip2 => {
+            unpack(Box::new(TempFileTee::new(bzip2::read::BzDecoder::new(fd))?), output)
+        }
+        FileType::Deb => {
             let mut decoder = ar::Archive::new(fd);
             while let Some(entry) = decoder.next_entry() {
                 let entry = entry?;
@@ -461,9 +465,7 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
             }
             Ok(())
         },
-
-        // TODO: unimplemented!()
-        _ => {
+        FileType::Other => {
             Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
         },
     }
