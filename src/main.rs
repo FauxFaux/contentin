@@ -303,6 +303,7 @@ fn identify<'a>(header: &[u8]) -> FileType {
 trait Tee: io::BufRead {
     fn reset(&mut self) -> io::Result<()>;
     fn len_and_reset(&mut self) -> io::Result<u64>;
+    fn as_seekable(&mut self) -> Option<&mut Seeker>;
 }
 
 struct TempFileTee {
@@ -342,6 +343,10 @@ impl Tee for TempFileTee {
         self.reset()?;
         Ok(len)
     }
+
+    fn as_seekable(&mut self) -> Option<&mut Seeker> {
+        unimplemented!()
+    }
 }
 
 // Look, I didn't want to implement these. I wanted to return the implementation.
@@ -362,20 +367,20 @@ impl io::BufRead for TempFileTee {
     }
 }
 
-struct BufReaderTee<T> {
-    inner: Box<T>,
+struct BufReaderTee<R: io::Read> {
+    inner: Box<io::BufReader<R>>,
 }
 
-impl<U: io::Read> BufReaderTee<io::BufReader<U>> {
-    fn new(from: U) -> Self {
+impl<R: io::Read> BufReaderTee<R> {
+    fn new(from: R) -> Self {
         BufReaderTee {
             inner: Box::new(io::BufReader::new(from))
         }
     }
 }
 
-impl<T> Tee for BufReaderTee<T>
-    where T: io::BufRead + io::Seek + 'static
+impl<R: io::Read> Tee for BufReaderTee<R>
+    where R: io::Seek + 'static
 {
     fn reset(&mut self) -> io::Result<()> {
         self.inner.seek(io::SeekFrom::Start(0)).map(|_|())
@@ -386,17 +391,19 @@ impl<T> Tee for BufReaderTee<T>
         self.reset()?;
         Ok(len)
     }
+
+    fn as_seekable(&mut self) -> Option<&mut Seeker> {
+        Some(&mut *self.inner)
+    }
 }
 
-impl<T> io::Read for BufReaderTee<T>
-    where T: io::Read {
+impl<R: io::Read> io::Read for BufReaderTee<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf)
     }
 }
 
-impl<T> io::BufRead for BufReaderTee<T>
-    where T: io::BufRead {
+impl<R: io::Read> io::BufRead for BufReaderTee<R> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         self.inner.fill_buf()
     }
@@ -428,6 +435,10 @@ impl<T> Tee for FailingTee<T>
     fn len_and_reset(&mut self) -> io::Result<u64> {
         unreachable!();
     }
+
+    fn as_seekable(&mut self) -> Option<&mut Seeker> {
+        unimplemented!()
+    }
 }
 
 impl<T> io::Read for FailingTee<T>
@@ -446,6 +457,13 @@ impl<T> io::BufRead for FailingTee<T>
     fn consume(&mut self, amt: usize) {
         self.inner.consume(amt)
     }
+}
+
+trait Seeker: io::Seek + io::Read {
+}
+
+impl<R: io::Read> Seeker for io::BufReader<R>
+where R: io::Seek {
 }
 
 #[derive(Clone, Copy, Debug)]
