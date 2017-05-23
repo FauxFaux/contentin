@@ -261,7 +261,7 @@ fn is_probably_tar(header: &[u8]) -> bool {
 
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
 
-fn identify<'a>(fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<FileType> {
+fn identify<'a>(fd: &mut io::BufRead, output: &OutputTo) -> io::Result<FileType> {
     let header = fd.fill_buf()?;
 
 //    if header.len() >= 3 {
@@ -309,6 +309,7 @@ fn identify<'a>(fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<FileType> {
 trait Tee: io::BufRead {
     fn reset(&mut self) -> io::Result<()>;
     fn len_and_reset(&mut self) -> io::Result<u64>;
+    fn mut_ref(&mut self) -> &mut io::BufRead;
 }
 
 struct TempFileTee {
@@ -347,6 +348,10 @@ impl Tee for TempFileTee {
         let len = self.inner.seek(END)?;
         self.reset()?;
         Ok(len)
+    }
+
+    fn mut_ref(&mut self) -> &mut io::BufRead {
+        &mut self.inner
     }
 }
 
@@ -392,6 +397,10 @@ impl<T> Tee for BufReaderTee<T>
         self.reset()?;
         Ok(len)
     }
+
+    fn mut_ref(&mut self) -> &mut io::BufRead {
+        &mut self.inner
+    }
 }
 
 impl<T> io::Read for BufReaderTee<T>
@@ -428,8 +437,8 @@ impl fmt::Display for Rewind {
     }
 }
 
-fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()> {
-    let identity = identify(&mut fd, output)?;
+fn unpack_or_die<'a>(mut fd: &mut io::BufRead, output: &OutputTo) -> io::Result<()> {
+    let identity = identify(fd, output)?;
     output.log(2, || format!("identified as {}", identity))?;
     match identity {
         FileType::GZip => {
@@ -449,17 +458,18 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
                 new_output.mtime = mtime;
                 new_output
             };
-            unpack(Box::new(TempFileTee::new(dec)?), &new_output)
+
+            unpack_or_die(&mut io::BufReader::new(dec), &new_output)
         },
 
         // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
         FileType::Xz => {
             let new_output = output.with_path(output.strip_compression_suffix(".xz"));
-            unpack(Box::new(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?), &new_output)
+            unpack_or_die(&mut io::BufReader::new(xz2::bufread::XzDecoder::new(fd)), &new_output)
         },
         FileType::BZip2 => {
             let new_output = output.with_path(output.strip_compression_suffix(".bz2"));
-            unpack(Box::new(TempFileTee::new(bzip2::read::BzDecoder::new(fd))?), &new_output)
+            unpack_or_die(&mut io::BufReader::new(bzip2::read::BzDecoder::new(fd)), &new_output)
         }
 
         FileType::Deb => {
@@ -547,7 +557,7 @@ fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
         return Ok(());
     }
 
-    let res = unpack_or_die(&mut fd, output);
+    let res = unpack_or_die(fd.mut_ref(), output);
     if let Err(ref raw_error) = res {
         if let Some(specific) = is_format_error(raw_error) {
             match specific {
