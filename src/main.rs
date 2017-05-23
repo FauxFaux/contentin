@@ -428,12 +428,21 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
             let new_output = {
                 let header = dec.header();
                 let mtime = simple_time_epoch_seconds(header.modification_time());
-                let name = header.filename().map(
-                    |ref c_str| c_str.to_str().map_err(
+                let name = match header.filename() {
+                    Some(ref c_str) => c_str.to_str().map_err(
                         |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
                                   format!("gzip member's name must be valid utf-8: {} {:?}",
-                                          not_utf8, c_str.as_bytes())))
-                    ).unwrap_or(Ok(""))?;
+                                          not_utf8, c_str.as_bytes())))?,
+                    None => {
+                        let our_name = output.path.value.as_str();
+                        if our_name.ends_with(".gz") {
+                            &our_name[..our_name.len() - 3]
+                        } else {
+                            ""
+                        }
+                    },
+                };
+
                 let mut new_output = output.with_path(name);
                 new_output.mtime = mtime;
                 new_output
