@@ -345,7 +345,7 @@ impl Tee for TempFileTee {
     }
 
     fn as_seekable(&mut self) -> Option<&mut Seeker> {
-        unimplemented!()
+        Some(&mut self.inner)
     }
 }
 
@@ -437,7 +437,7 @@ impl<T> Tee for FailingTee<T>
     }
 
     fn as_seekable(&mut self) -> Option<&mut Seeker> {
-        unimplemented!()
+        None
     }
 }
 
@@ -480,6 +480,25 @@ impl fmt::Display for Rewind {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "rewind")
     }
+}
+
+fn process_zip<T>(from: T, output: &OutputTo) -> io::Result<()>
+where T: io::Read + io::Seek {
+
+    let mut zip = zip::ZipArchive::new(from)?;
+
+    for i in 0..zip.len() {
+
+        // well, this has gone rather poorly
+        let mut new_output = output.with_path(zip.by_index(i)?.name());
+
+        let entry = zip.by_index(i)?;
+
+        new_output.mtime = simple_time_tm(entry.last_modified());
+        let reader = Box::new(TempFileTee::new(entry)?);
+        unpack(reader, &new_output)?;
+    }
+    Ok(())
 }
 
 fn unpack_or_die<'a>(mut fd: &mut Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
@@ -542,23 +561,13 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee + 'a>, output: &OutputTo) -> io::Resul
             Ok(())
         },
         FileType::Zip => {
-            // TODO: teach Tee to expose its Seekable if it can, otherwise tempfile
+            if let Some(seekable) = fd.as_seekable() {
+                return process_zip(seekable, output);
+            }
+
             let mut temp = tempfile()?;
             io::copy(&mut fd, &mut temp)?;
-            let mut zip = zip::ZipArchive::new(temp)?;
-
-            for i in 0..zip.len() {
-
-                // well, this has gone rather poorly
-                let mut new_output = output.with_path(zip.by_index(i)?.name());
-
-                let entry = zip.by_index(i)?;
-
-                new_output.mtime = simple_time_tm(entry.last_modified());
-                let reader = Box::new(TempFileTee::new(entry)?);
-                unpack(reader, &new_output)?;
-            }
-            Ok(())
+            process_zip(temp, output)
         },
         FileType::Other => {
             Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
