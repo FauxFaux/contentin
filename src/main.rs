@@ -412,6 +412,52 @@ impl<T> io::BufRead for BufReaderTee<T>
     }
 }
 
+struct AgainTee<'a, T: Tee + 'a, F: Fn(&T) -> gzip::Decoder<T> + 'a> {
+    inner: &'a T,
+    run: Box<gzip::Decoder<T>>,
+    start: &'a F,
+}
+
+impl<'a, T: Tee, F: Fn(&T) -> gzip::Decoder<T>> AgainTee<'a, T, F> {
+    fn new(from: &'a Tee, create: &'a F) -> Self {
+        let initial: gzip::Decoder<Tee> = create().expect("TODO");
+        AgainTee {
+            start: create,
+            inner: from,
+            run: Box::new(initial),
+        }
+    }
+}
+
+impl<'a, T: Tee, F: Fn(&Tee) -> gzip::Decoder<Tee>> io::Read for AgainTee<'a, T, F> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl<'a, T: Tee, F: Fn(&Tee) -> gzip::Decoder<Tee>> io::BufRead for AgainTee<'a, T, F> {
+
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.inner.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.inner.consume(amt)
+    }
+}
+
+impl<'a, T: Tee, F: Fn(&Tee) -> gzip::Decoder<Tee>> Tee for AgainTee<'a, T, F> {
+
+    fn reset(&mut self) -> io::Result<()> {
+        self.inner = (self.start)().map(Box::new)
+    }
+
+    fn len_and_reset(&mut self) -> io::Result<u64> {
+        unimplemented!()
+    }
+}
+
+
 #[derive(Clone, Copy, Debug)]
 struct Rewind {
 }
