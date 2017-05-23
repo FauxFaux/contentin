@@ -312,7 +312,7 @@ trait Tee: io::BufRead {
 }
 
 struct TempFileTee {
-    tmp: io::BufReader<fs::File>,
+    inner: io::BufReader<fs::File>,
 }
 
 impl TempFileTee {
@@ -330,7 +330,7 @@ impl TempFileTee {
         tmp.seek(BEGINNING)?;
 
         Ok(TempFileTee {
-            tmp: io::BufReader::new(tmp),
+            inner: io::BufReader::new(tmp),
         })
     }
 }
@@ -340,11 +340,11 @@ const END: io::SeekFrom = io::SeekFrom::End(0);
 
 impl Tee for TempFileTee {
     fn reset(&mut self) -> io::Result<()> {
-        self.tmp.seek(BEGINNING).map(|_| ())
+        self.inner.seek(BEGINNING).map(|_| ())
     }
 
     fn len_and_reset(&mut self) -> io::Result<u64> {
-        let len = self.tmp.seek(END)?;
+        let len = self.inner.seek(END)?;
         self.reset()?;
         Ok(len)
     }
@@ -354,28 +354,28 @@ impl Tee for TempFileTee {
 // But I couldn't make it compile, and I might care enough eventually.
 impl io::Read for TempFileTee {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.tmp.read(buf)
+        self.inner.read(buf)
     }
 }
 
 impl io::BufRead for TempFileTee {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        self.tmp.fill_buf()
+        self.inner.fill_buf()
     }
 
     fn consume(&mut self, amt: usize) {
-        self.tmp.consume(amt)
+        self.inner.consume(amt)
     }
 }
 
 struct BufReaderTee<T> {
-    fp: Box<T>,
+    inner: Box<T>,
 }
 
 impl<U: io::Read> BufReaderTee<io::BufReader<U>> {
     fn new(from: U) -> Self {
         BufReaderTee {
-            fp: Box::new(io::BufReader::new(from))
+            inner: Box::new(io::BufReader::new(from))
         }
     }
 }
@@ -384,11 +384,11 @@ impl<T> Tee for BufReaderTee<T>
     where T: io::BufRead + io::Seek + 'static
 {
     fn reset(&mut self) -> io::Result<()> {
-        self.fp.seek(io::SeekFrom::Start(0)).map(|_|())
+        self.inner.seek(io::SeekFrom::Start(0)).map(|_|())
     }
 
     fn len_and_reset(&mut self) -> io::Result<u64> {
-        let len = self.fp.seek(END)?;
+        let len = self.inner.seek(END)?;
         self.reset()?;
         Ok(len)
     }
@@ -397,18 +397,18 @@ impl<T> Tee for BufReaderTee<T>
 impl<T> io::Read for BufReaderTee<T>
     where T: io::Read {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.fp.read(buf)
+        self.inner.read(buf)
     }
 }
 
 impl<T> io::BufRead for BufReaderTee<T>
     where T: io::BufRead {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        self.fp.fill_buf()
+        self.inner.fill_buf()
     }
 
     fn consume(&mut self, amt: usize) {
-        self.fp.consume(amt)
+        self.inner.consume(amt)
     }
 }
 
