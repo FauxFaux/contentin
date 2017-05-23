@@ -86,10 +86,10 @@ impl<'a> OutputTo<'a> {
         }
 
         let name = match level {
-            1 => "warn".to_string(),
-            2 => "info".to_string(),
-            3 => "debug".to_string(),
-            _ => format!("v{}", level),
+            1 => "warn",
+            2 => "info",
+            3 => "debug",
+            _ => unreachable!()
         };
 
         writeln!(io::stderr(), "{}: {}", name, msg()).map(|_|())
