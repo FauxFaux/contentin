@@ -145,6 +145,15 @@ impl<'a> OutputTo<'a> {
             btime: 0,
         }
     }
+
+    fn strip_compression_suffix(&self, suffix: &str) -> &str {
+        let our_name = self.path.value.as_str();
+        if our_name.ends_with(suffix) {
+            &our_name[..our_name.len() - suffix.len()]
+        } else {
+            ""
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -433,14 +442,7 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
                         |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
                                   format!("gzip member's name must be valid utf-8: {} {:?}",
                                           not_utf8, c_str.as_bytes())))?,
-                    None => {
-                        let our_name = output.path.value.as_str();
-                        if our_name.ends_with(".gz") {
-                            &our_name[..our_name.len() - 3]
-                        } else {
-                            ""
-                        }
-                    },
+                    None => output.strip_compression_suffix(".gz"),
                 };
 
                 let mut new_output = output.with_path(name);
@@ -449,12 +451,17 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
             };
             unpack(Box::new(TempFileTee::new(dec)?), &new_output)
         },
+
+        // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
         FileType::Xz => {
-            unpack(Box::new(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?), output)
+            let new_output = output.with_path(output.strip_compression_suffix(".xz"));
+            unpack(Box::new(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?), &new_output)
         },
         FileType::BZip2 => {
-            unpack(Box::new(TempFileTee::new(bzip2::read::BzDecoder::new(fd))?), output)
+            let new_output = output.with_path(output.strip_compression_suffix(".bz2"));
+            unpack(Box::new(TempFileTee::new(bzip2::read::BzDecoder::new(fd))?), &new_output)
         }
+
         FileType::Deb => {
             let mut decoder = ar::Archive::new(fd);
             while let Some(entry) = decoder.next_entry() {
