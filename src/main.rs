@@ -477,12 +477,27 @@ enum FormatErrorType {
 }
 
 fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
-    if io::ErrorKind::Other == e.kind() {
-        if let Some(ref obj) = e.get_ref() {
-            if obj.is::<Rewind>() {
-                return Some(FormatErrorType::Rewind);
+    // if there's an actual error code (regardless of what it is),
+    // it's probably not from a library
+    if e.raw_os_error().is_some() {
+        return None;
+    }
+
+    match e.kind() {
+        io::ErrorKind::Other => {
+            if let Some(ref obj) = e.get_ref() {
+
+                // our marker error for backtracking
+                if obj.is::<Rewind>() {
+                    return Some(FormatErrorType::Rewind);
+                }
             }
-        }
+        },
+        io::ErrorKind::BrokenPipe
+            | io::ErrorKind::NotFound
+            | io::ErrorKind::PermissionDenied
+                => return None,
+        _ => {},
     }
 
     panic!("don't know if {:?} / {:?} / {:?} is a format error", e, e.kind(), e.get_ref())
