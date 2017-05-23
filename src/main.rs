@@ -97,21 +97,25 @@ impl<'a> OutputTo<'a> {
         writeln!(io::stderr(), "{}: {}", name, msg()).map(|_|())
     }
 
-    fn raw(&self, mut file: Box<Tee>) -> io::Result<()> {
+    fn complete(&self, mut file: Box<Tee>) -> io::Result<()> {
+        let size = file.len_and_reset()?;
+        self.complete_details(file, size)
+    }
+
+    fn complete_details<R: io::Read>(&self, mut src: R, size: u64) -> io::Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-        let size = file.len_and_reset()?;
         writeln!(stdout, "{:?} {} {} {} {} {}",
-            self.path.to_vec(),
-            size,
-            self.atime, self.mtime, self.ctime, self.btime
+                 self.path.to_vec(),
+                 size,
+                 self.atime, self.mtime, self.ctime, self.btime
         )?;
 
         if self.options.list {
             return Ok(())
         }
 
-        io::copy(&mut file, &mut stdout).and_then(move |written|
+        io::copy(&mut src, &mut stdout).and_then(move |written|
             if written != size {
                 Err(io::Error::new(
                     io::ErrorKind::UnexpectedEof,
@@ -488,12 +492,28 @@ where T: io::Read + io::Seek {
     let mut zip = zip::ZipArchive::new(from)?;
 
     for i in 0..zip.len() {
-        let entry = zip.by_index(i)?;
-        let mut new_output = output.with_path(entry.name());
+        let res = {
+            let entry = zip.by_index(i)?;
+            let mut new_output = output.with_path(entry.name());
 
-        new_output.mtime = simple_time_tm(entry.last_modified());
-        let reader = Box::new(TempFileTee::new(entry)?);
-        unpack(reader, &new_output)?;
+            new_output.mtime = simple_time_tm(entry.last_modified());
+            let mut failing: Box<Tee> = Box::new(FailingTee::new(entry));
+            unpack_or_die(&mut failing, &new_output)
+        };
+
+        if let Err(ref error) = res {
+            if is_format_error_result(error, output)? {
+                let new_entry = zip.by_index(i)?;
+                let size = new_entry.size();
+                output.complete_details(new_entry, size)?;
+                continue;
+            }
+        }
+
+        // scope based borrow sigh; same block as above
+        if res.is_err() {
+            return res;
+        }
     }
     Ok(())
 }
@@ -609,20 +629,28 @@ fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
     panic!("don't know if {:?} / {:?} / {:?} is a format error", e, e.kind(), e.get_ref())
 }
 
+fn is_format_error_result(error: &io::Error, output: &OutputTo) -> io::Result<bool> {
+    if let Some(specific) = is_format_error(error) {
+        match specific {
+            FormatErrorType::Other => {
+                output.log(1, || format!(
+                    "thought we could unpack '{:?}' but we couldn't: {}",
+                    output.path, error))?;
+            },
+            FormatErrorType::Rewind => {},
+        }
+
+        return Ok(true);
+    }
+    return Ok(false);
+}
+
 fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
     let res = unpack_or_die(&mut fd, output);
-    if let Err(ref raw_error) = res {
-        if let Some(specific) = is_format_error(raw_error) {
-            match specific {
-                FormatErrorType::Other => {
-                    output.log(1, || format!(
-                        "thought we could unpack '{:?}' but we couldn't: {}",
-                        output.path, raw_error))?;
-                },
-                FormatErrorType::Rewind => {},
-            }
 
-            output.raw(fd)?;
+    if let Err(ref error) = res {
+        if is_format_error_result(&error, output)? {
+            output.complete(fd)?;
             return Ok(());
         }
     }
