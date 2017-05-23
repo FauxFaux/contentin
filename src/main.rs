@@ -65,12 +65,14 @@ impl<T: Clone> Node<T> {
 
 struct Options {
     list: bool,
+    max_depth: u32,
     verbose: u8,
 }
 
 struct OutputTo<'a> {
     options: &'a Options,
     path: Rc<Node<String>>,
+    depth: u32,
     atime: u64,
     mtime: u64,
     ctime: u64,
@@ -123,6 +125,7 @@ impl<'a> OutputTo<'a> {
         let meta = fd.metadata()?;
         Ok(OutputTo {
             options,
+            depth: 0,
             path: Node::head(path.to_string()),
             atime: meta.accessed().map(simple_time_sys)?,
             mtime: meta.modified().map(simple_time_sys)?,
@@ -135,6 +138,7 @@ impl<'a> OutputTo<'a> {
         OutputTo {
             options: self.options,
             path: Node::plus(&self.path, path.to_string()),
+            depth: self.depth + 1,
             atime: 0,
             mtime: 0,
             ctime: 0,
@@ -201,6 +205,10 @@ fn simple_time_btime(val: &fs::Metadata) -> io::Result<u64> {
         Err(ref e) if e.kind() == io::ErrorKind::Other => Ok(0),
         Err(other) => Err(other),
     }
+}
+
+fn simple_time_epoch_seconds(seconds: u32) -> u64 {
+    (seconds as u64).checked_mul(1_000_000_000).unwrap_or(0)
 }
 
 // TODO: I really feel this should be exposed by Rust, without cfg.
@@ -416,7 +424,21 @@ fn unpack_or_die<'a>(mut fd: &mut Box<Tee>, output: &OutputTo) -> io::Result<()>
     output.log(2, || format!("identified as {}", identity))?;
     match identity {
         FileType::GZip => {
-            unpack(Box::new(TempFileTee::new(gzip::Decoder::new(fd)?)?), output)
+            let dec = gzip::Decoder::new(fd)?;
+            let new_output = {
+                let header = dec.header();
+                let mtime = simple_time_epoch_seconds(header.modification_time());
+                let name = header.filename().map(
+                    |ref c_str| c_str.to_str().map_err(
+                        |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
+                                  format!("gzip member's name must be valid utf-8: {} {:?}",
+                                          not_utf8, c_str.as_bytes())))
+                    ).unwrap_or(Ok(""))?;
+                let mut new_output = output.with_path(name);
+                new_output.mtime = mtime;
+                new_output
+            };
+            unpack(Box::new(TempFileTee::new(dec)?), &new_output)
         },
         FileType::Xz => {
             unpack(Box::new(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?), output)
@@ -504,6 +526,11 @@ fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
 }
 
 fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
+    if output.depth >= output.options.max_depth {
+        output.raw(fd)?;
+        return Ok(());
+    }
+
     let res = unpack_or_die(&mut fd, output);
     if let Err(ref raw_error) = res {
         if let Some(specific) = is_format_error(raw_error) {
@@ -553,14 +580,27 @@ fn real_main() -> u8 {
                         .short("t")
                         .long("list")
                         .help("Show headers only, not object content"))
+                    .arg(Arg::with_name("max-depth")
+                        .short("d")
+                        .long("max-depth")
+                        .takes_value(true)
+                        .use_delimiter(false)
+                        .default_value("256")
+                        .hide_default_value(true)
+                        .validator(|val| match val.parse::<u32>() {
+                            Ok(_) => Ok(()),
+                            Err(e) => Err(format!("must be valid number: {}", e))
+                        })
+                        .help("Limit recursion. 1: like unzip. Default: lots"))
                     .arg(Arg::with_name("INPUT")
-                         .required(true)
+                        .required(true)
                         .help("File(s) to process")
-                         .multiple(true))
+                        .multiple(true))
                     .get_matches();
 
     let options = Options {
         list: matches.is_present("list"),
+        max_depth: matches.value_of("max-depth").unwrap().parse().unwrap(),
         verbose: must_fit(matches.occurrences_of("v")),
     };
 
