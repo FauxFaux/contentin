@@ -502,6 +502,11 @@ where T: io::Read + io::Seek {
 }
 
 fn unpack_or_die<'a>(mut fd: &mut Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
+    if output.depth >= output.options.max_depth {
+        return Err(io::Error::new(io::ErrorKind::Other, Rewind {}));
+    }
+
+
     let identity = identify(fd.fill_buf()?);
     output.log(2, || format!("identified as {}", identity))?;
     match identity {
@@ -608,11 +613,6 @@ fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
 }
 
 fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
-    if output.depth >= output.options.max_depth {
-        output.raw(fd)?;
-        return Ok(());
-    }
-
     let res = unpack_or_die(&mut fd, output);
     if let Err(ref raw_error) = res {
         if let Some(specific) = is_format_error(raw_error) {
