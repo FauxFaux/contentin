@@ -488,11 +488,8 @@ where T: io::Read + io::Seek {
     let mut zip = zip::ZipArchive::new(from)?;
 
     for i in 0..zip.len() {
-
-        // well, this has gone rather poorly
-        let mut new_output = output.with_path(zip.by_index(i)?.name());
-
         let entry = zip.by_index(i)?;
+        let mut new_output = output.with_path(entry.name());
 
         new_output.mtime = simple_time_tm(entry.last_modified());
         let reader = Box::new(TempFileTee::new(entry)?);
