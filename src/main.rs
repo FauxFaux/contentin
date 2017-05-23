@@ -303,7 +303,6 @@ fn identify<'a>(header: &[u8]) -> FileType {
 trait Tee: io::BufRead {
     fn reset(&mut self) -> io::Result<()>;
     fn len_and_reset(&mut self) -> io::Result<u64>;
-    fn mut_ref(&mut self) -> &mut io::BufRead;
 }
 
 struct TempFileTee {
@@ -342,10 +341,6 @@ impl Tee for TempFileTee {
         let len = self.inner.seek(END)?;
         self.reset()?;
         Ok(len)
-    }
-
-    fn mut_ref(&mut self) -> &mut io::BufRead {
-        &mut self.inner
     }
 }
 
@@ -391,10 +386,6 @@ impl<T> Tee for BufReaderTee<T>
         self.reset()?;
         Ok(len)
     }
-
-    fn mut_ref(&mut self) -> &mut io::BufRead {
-        &mut self.inner
-    }
 }
 
 impl<T> io::Read for BufReaderTee<T>
@@ -405,6 +396,48 @@ impl<T> io::Read for BufReaderTee<T>
 }
 
 impl<T> io::BufRead for BufReaderTee<T>
+    where T: io::BufRead {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.inner.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.inner.consume(amt)
+    }
+}
+
+struct FailingTee<T> {
+    inner: Box<T>,
+}
+
+impl<U: io::Read> FailingTee<io::BufReader<U>> {
+    fn new(from: U) -> Self {
+        FailingTee {
+            inner: Box::new(io::BufReader::new(from))
+        }
+    }
+}
+
+impl<T> Tee for FailingTee<T>
+    where T: io::BufRead
+{
+    fn reset(&mut self) -> io::Result<()> {
+        unreachable!();
+    }
+
+    fn len_and_reset(&mut self) -> io::Result<u64> {
+        unreachable!();
+    }
+}
+
+impl<T> io::Read for FailingTee<T>
+    where T: io::Read {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl<T> io::BufRead for FailingTee<T>
     where T: io::BufRead {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         self.inner.fill_buf()
@@ -431,7 +464,7 @@ impl fmt::Display for Rewind {
     }
 }
 
-fn unpack_or_die<'a>(mut fd: &mut io::BufRead, output: &OutputTo) -> io::Result<()> {
+fn unpack_or_die<'a>(mut fd: &mut Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
     let identity = identify(fd.fill_buf()?);
     output.log(2, || format!("identified as {}", identity))?;
     match identity {
@@ -452,18 +485,20 @@ fn unpack_or_die<'a>(mut fd: &mut io::BufRead, output: &OutputTo) -> io::Result<
                 new_output.mtime = mtime;
                 new_output
             };
-
-            unpack_or_die(&mut io::BufReader::new(dec), &new_output)
+            let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
+            unpack_or_die(&mut failing, &new_output)
         },
 
         // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
         FileType::Xz => {
             let new_output = output.with_path(output.strip_compression_suffix(".xz"));
-            unpack_or_die(&mut io::BufReader::new(xz2::bufread::XzDecoder::new(fd)), &new_output)
+            let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(fd)));
+            unpack_or_die(&mut failing, &new_output)
         },
         FileType::BZip2 => {
             let new_output = output.with_path(output.strip_compression_suffix(".bz2"));
-            unpack_or_die(&mut io::BufReader::new(bzip2::read::BzDecoder::new(fd)), &new_output)
+            let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(fd)));
+            unpack_or_die(&mut failing, &new_output)
         }
 
         FileType::Deb => {
@@ -551,7 +586,7 @@ fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
         return Ok(());
     }
 
-    let res = unpack_or_die(fd.mut_ref(), output);
+    let res = unpack_or_die(&mut fd, output);
     if let Err(ref raw_error) = res {
         if let Some(specific) = is_format_error(raw_error) {
             match specific {
