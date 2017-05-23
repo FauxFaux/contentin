@@ -261,20 +261,14 @@ fn is_probably_tar(header: &[u8]) -> bool {
 
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
 
-fn identify<'a>(fd: &mut io::BufRead, output: &OutputTo) -> io::Result<FileType> {
-    let header = fd.fill_buf()?;
-
-//    if header.len() >= 3 {
-//        output.log(3, &format!("{} {} {}", header[0], header[1], header[2]))?;
-//    }
-
+fn identify<'a>(header: &[u8]) -> FileType {
     if header.len() >= 20
         && 0x1f == header[0] && 0x8b == header[1] {
-        Ok(FileType::GZip)
+        FileType::GZip
    } else if header.len() >= 152
         && b'P' == header[0] && b'K' == header[1]
         && 0x03 == header[2] && 0x04 == header[3] {
-        Ok(FileType::Zip)
+        FileType::Zip
     } else if header.len() > 257 + 10
         && b'u' == header[257] && b's' == header[258]
         && b't' == header[259] && b'a' == header[260]
@@ -283,26 +277,26 @@ fn identify<'a>(fd: &mut io::BufRead, output: &OutputTo) -> io::Result<FileType>
             (0 == header[262] && b'0' == header[263] && b'0' == header[264]) ||
             (b' ' == header[262] && b' ' == header[263] && 0 == header[264])
         ) {
-        Ok(FileType::Tar)
+        FileType::Tar
     } else if header.len() > 70
         && header[0..DEB_PREFIX.len()] == DEB_PREFIX[..]
         && header[66..70] == b"`\n2."[..] {
-        Ok(FileType::Deb)
+        FileType::Deb
     } else if header.len() > 40
         && b'B' == header[0] && b'Z' == header[1]
         && b'h' == header[2] && 0x31 == header[3]
         && 0x41 == header[4] && 0x59 == header[5]
         && 0x26 == header[6] {
-        Ok(FileType::BZip2)
+        FileType::BZip2
     } else if header.len() > 6
         && 0xfd == header[0] && b'7' == header[1]
         && b'z' == header[2] && b'X' == header[3]
         && b'Z' == header[4] && 0 == header[5] {
-        Ok(FileType::Xz)
+        FileType::Xz
     } else if is_probably_tar(header) {
-        Ok(FileType::Tar)
+        FileType::Tar
     } else {
-        Ok(FileType::Other)
+        FileType::Other
     }
 }
 
@@ -438,7 +432,7 @@ impl fmt::Display for Rewind {
 }
 
 fn unpack_or_die<'a>(mut fd: &mut io::BufRead, output: &OutputTo) -> io::Result<()> {
-    let identity = identify(fd, output)?;
+    let identity = identify(fd.fill_buf()?);
     output.log(2, || format!("identified as {}", identity))?;
     match identity {
         FileType::GZip => {
