@@ -71,14 +71,18 @@ struct Options {
     verbose: u8,
 }
 
-struct Unpacker<'a> {
-    options: &'a Options,
+struct FileDetails {
     path: Rc<Node<String>>,
     depth: u32,
     atime: u64,
     mtime: u64,
     ctime: u64,
     btime: u64,
+}
+
+struct Unpacker<'a> {
+    options: &'a Options,
+    current: FileDetails,
 }
 
 impl<'a> Unpacker<'a> {
@@ -108,9 +112,9 @@ impl<'a> Unpacker<'a> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
         writeln!(stdout, "{:?} {} {} {} {} {}",
-                 self.path.to_vec(),
+                 self.current.path.to_vec(),
                  size,
-                 self.atime, self.mtime, self.ctime, self.btime
+                 self.current.atime, self.current.mtime, self.current.ctime, self.current.btime
         )?;
 
         if self.options.list {
@@ -131,29 +135,33 @@ impl<'a> Unpacker<'a> {
         let meta = fd.metadata()?;
         Ok(Unpacker {
             options,
-            depth: 0,
-            path: Node::head(path.to_string()),
-            atime: meta.accessed().map(simple_time_sys)?,
-            mtime: meta.modified().map(simple_time_sys)?,
-            ctime: simple_time_ctime(&meta),
-            btime: simple_time_btime(&meta)?,
+            current: FileDetails {
+                depth: 0,
+                path: Node::head(path.to_string()),
+                atime: meta.accessed().map(simple_time_sys)?,
+                mtime: meta.modified().map(simple_time_sys)?,
+                ctime: simple_time_ctime(&meta),
+                btime: simple_time_btime(&meta)?,
+            },
         })
     }
 
     fn with_path(&self, path: &str) -> Unpacker {
         Unpacker {
             options: self.options,
-            path: Node::plus(&self.path, path.to_string()),
-            depth: self.depth + 1,
-            atime: 0,
-            mtime: 0,
-            ctime: 0,
-            btime: 0,
+            current: FileDetails {
+                path: Node::plus(&self.current.path, path.to_string()),
+                depth: self.current.depth + 1,
+                atime: 0,
+                mtime: 0,
+                ctime: 0,
+                btime: 0,
+            },
         }
     }
 
     fn strip_compression_suffix(&self, suffix: &str) -> &str {
-        let our_name = self.path.value.as_str();
+        let our_name = self.current.path.value.as_str();
         if our_name.ends_with(suffix) {
             &our_name[..our_name.len() - suffix.len()]
         } else {
@@ -364,7 +372,7 @@ impl<'a> Unpacker<'a> {
                 let entry = zip.by_index(i)?;
                 let mut new_output = self.with_path(entry.name());
 
-                new_output.mtime = simple_time_tm(entry.last_modified());
+                new_output.current.mtime = simple_time_tm(entry.last_modified());
                 let mut failing: Box<Tee> = Box::new(FailingTee::new(entry));
                 new_output.unpack_or_die(&mut failing)
             };
@@ -387,7 +395,7 @@ impl<'a> Unpacker<'a> {
     }
 
     fn unpack_or_die<'b>(&self, mut fd: &mut Box<Tee + 'b>) -> io::Result<()> {
-        if self.depth >= self.options.max_depth {
+        if self.current.depth >= self.options.max_depth {
             return Err(io::Error::new(io::ErrorKind::Other, Rewind {}));
         }
 
@@ -409,7 +417,7 @@ impl<'a> Unpacker<'a> {
                     };
 
                     let mut new_output = self.with_path(name);
-                    new_output.mtime = mtime;
+                    new_output.current.mtime = mtime;
                     new_output
                 };
                 let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
@@ -472,7 +480,7 @@ impl<'a> Unpacker<'a> {
                 FormatErrorType::Other => {
                     self.log(1, || format!(
                         "thought we could unpack '{:?}' but we couldn't: {}",
-                        self.path, error))?;
+                        self.current.path, error))?;
                 },
                 FormatErrorType::Rewind => {},
             }
