@@ -71,7 +71,7 @@ struct Options {
     verbose: u8,
 }
 
-struct OutputTo<'a> {
+struct Unpacker<'a> {
     options: &'a Options,
     path: Rc<Node<String>>,
     depth: u32,
@@ -81,7 +81,7 @@ struct OutputTo<'a> {
     btime: u64,
 }
 
-impl<'a> OutputTo<'a> {
+impl<'a> Unpacker<'a> {
     fn log<T: fmt::Display, F>(&self, level: u8, msg: F) -> io::Result<()>
     where F: FnOnce() -> T
     {
@@ -127,9 +127,9 @@ impl<'a> OutputTo<'a> {
             })
     }
 
-    fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> io::Result<OutputTo<'b>> {
+    fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> io::Result<Unpacker<'b>> {
         let meta = fd.metadata()?;
-        Ok(OutputTo {
+        Ok(Unpacker {
             options,
             depth: 0,
             path: Node::head(path.to_string()),
@@ -140,8 +140,8 @@ impl<'a> OutputTo<'a> {
         })
     }
 
-    fn with_path(&self, path: &str) -> OutputTo {
-        OutputTo {
+    fn with_path(&self, path: &str) -> Unpacker {
+        Unpacker {
             options: self.options,
             path: Node::plus(&self.path, path.to_string()),
             depth: self.depth + 1,
@@ -322,117 +322,6 @@ impl fmt::Display for Rewind {
     }
 }
 
-fn process_zip<T>(from: T, output: &OutputTo) -> io::Result<()>
-where T: io::Read + io::Seek {
-
-    let mut zip = zip::ZipArchive::new(from)?;
-
-    for i in 0..zip.len() {
-        let res = {
-            let entry = zip.by_index(i)?;
-            let mut new_output = output.with_path(entry.name());
-
-            new_output.mtime = simple_time_tm(entry.last_modified());
-            let mut failing: Box<Tee> = Box::new(FailingTee::new(entry));
-            unpack_or_die(&mut failing, &new_output)
-        };
-
-        if let Err(ref error) = res {
-            if is_format_error_result(error, output)? {
-                let new_entry = zip.by_index(i)?;
-                let size = new_entry.size();
-                output.complete_details(new_entry, size)?;
-                continue;
-            }
-        }
-
-        // scope based borrow sigh; same block as above
-        if res.is_err() {
-            return res;
-        }
-    }
-    Ok(())
-}
-
-fn unpack_or_die<'a>(mut fd: &mut Box<Tee + 'a>, output: &OutputTo) -> io::Result<()> {
-    if output.depth >= output.options.max_depth {
-        return Err(io::Error::new(io::ErrorKind::Other, Rewind {}));
-    }
-
-
-    let identity = identify(fd.fill_buf()?);
-    output.log(2, || format!("identified as {}", identity))?;
-    match identity {
-        FileType::GZip => {
-            let dec = gzip::Decoder::new(fd)?;
-            let new_output = {
-                let header = dec.header();
-                let mtime = simple_time_epoch_seconds(header.modification_time());
-                let name = match header.filename() {
-                    Some(ref c_str) => c_str.to_str().map_err(
-                        |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
-                                  format!("gzip member's name must be valid utf-8: {} {:?}",
-                                          not_utf8, c_str.as_bytes())))?,
-                    None => output.strip_compression_suffix(".gz"),
-                };
-
-                let mut new_output = output.with_path(name);
-                new_output.mtime = mtime;
-                new_output
-            };
-            let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
-            unpack_or_die(&mut failing, &new_output)
-        },
-
-        // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
-        FileType::Xz => {
-            let new_output = output.with_path(output.strip_compression_suffix(".xz"));
-            let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(fd)));
-            unpack_or_die(&mut failing, &new_output)
-        },
-        FileType::BZip2 => {
-            let new_output = output.with_path(output.strip_compression_suffix(".bz2"));
-            let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(fd)));
-            unpack_or_die(&mut failing, &new_output)
-        }
-
-        FileType::Deb => {
-            let mut decoder = ar::Archive::new(fd);
-            while let Some(entry) = decoder.next_entry() {
-                let entry = entry?;
-                let new_output = output.with_path(entry.header().identifier());
-                unpack(Box::new(TempFileTee::new(entry)?), &new_output)?;
-            }
-            Ok(())
-        },
-        FileType::Tar => {
-            let mut decoder = tar::Archive::new(fd);
-            for entry in decoder.entries()? {
-                let entry = entry?;
-                let new_output = output.with_path(entry.path()?.to_str()
-                    .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
-                                      format!("tar path contains invalid utf-8: {:?}",
-                                              entry.path_bytes())))?);
-
-                unpack(Box::new(TempFileTee::new(entry)?), &new_output)?;
-            }
-            Ok(())
-        },
-        FileType::Zip => {
-            if let Some(seekable) = fd.as_seekable() {
-                return process_zip(seekable, output);
-            }
-
-            let mut temp = tempfile()?;
-            io::copy(&mut fd, &mut temp)?;
-            process_zip(temp, output)
-        },
-        FileType::Other => {
-            Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
-        },
-    }
-}
-
 enum FormatErrorType {
     Rewind,
     Other,
@@ -456,53 +345,166 @@ fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
             }
         },
         io::ErrorKind::BrokenPipe
-            | io::ErrorKind::NotFound
-            | io::ErrorKind::PermissionDenied
-                => return None,
+        | io::ErrorKind::NotFound
+        | io::ErrorKind::PermissionDenied
+        => return None,
         _ => {},
     }
 
     panic!("don't know if {:?} / {:?} / {:?} is a format error", e, e.kind(), e.get_ref())
 }
 
-fn is_format_error_result(error: &io::Error, output: &OutputTo) -> io::Result<bool> {
-    if let Some(specific) = is_format_error(error) {
-        match specific {
-            FormatErrorType::Other => {
-                output.log(1, || format!(
-                    "thought we could unpack '{:?}' but we couldn't: {}",
-                    output.path, error))?;
+impl<'a> Unpacker<'a> {
+    fn process_zip<T>(&self, from: T) -> io::Result<()>
+        where T: io::Read + io::Seek {
+        let mut zip = zip::ZipArchive::new(from)?;
+
+        for i in 0..zip.len() {
+            let res = {
+                let entry = zip.by_index(i)?;
+                let mut new_output = self.with_path(entry.name());
+
+                new_output.mtime = simple_time_tm(entry.last_modified());
+                let mut failing: Box<Tee> = Box::new(FailingTee::new(entry));
+                new_output.unpack_or_die(&mut failing)
+            };
+
+            if let Err(ref error) = res {
+                if self.is_format_error_result(error)? {
+                    let new_entry = zip.by_index(i)?;
+                    let size = new_entry.size();
+                    self.complete_details(new_entry, size)?;
+                    continue;
+                }
+            }
+
+            // scope based borrow sigh; same block as above
+            if res.is_err() {
+                return res;
+            }
+        }
+        Ok(())
+    }
+
+    fn unpack_or_die<'b>(&self, mut fd: &mut Box<Tee + 'b>) -> io::Result<()> {
+        if self.depth >= self.options.max_depth {
+            return Err(io::Error::new(io::ErrorKind::Other, Rewind {}));
+        }
+
+
+        let identity = identify(fd.fill_buf()?);
+        self.log(2, || format!("identified as {}", identity))?;
+        match identity {
+            FileType::GZip => {
+                let dec = gzip::Decoder::new(fd)?;
+                let new_output = {
+                    let header = dec.header();
+                    let mtime = simple_time_epoch_seconds(header.modification_time());
+                    let name = match header.filename() {
+                        Some(ref c_str) => c_str.to_str().map_err(
+                            |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
+                                                      format!("gzip member's name must be valid utf-8: {} {:?}",
+                                                              not_utf8, c_str.as_bytes())))?,
+                        None => self.strip_compression_suffix(".gz"),
+                    };
+
+                    let mut new_output = self.with_path(name);
+                    new_output.mtime = mtime;
+                    new_output
+                };
+                let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
+                new_output.unpack_or_die(&mut failing)
             },
-            FormatErrorType::Rewind => {},
+
+            // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
+            FileType::Xz => {
+                let new_output = self.with_path(self.strip_compression_suffix(".xz"));
+                let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(fd)));
+                new_output.unpack_or_die(&mut failing)
+            },
+            FileType::BZip2 => {
+                let new_output = self.with_path(self.strip_compression_suffix(".bz2"));
+                let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(fd)));
+                new_output.unpack_or_die(&mut failing)
+            }
+
+            FileType::Deb => {
+                let mut decoder = ar::Archive::new(fd);
+                while let Some(entry) = decoder.next_entry() {
+                    let entry = entry?;
+                    let new_output = self.with_path(entry.header().identifier());
+                    new_output.unpack(Box::new(TempFileTee::new(entry)?))?;
+                }
+                Ok(())
+            },
+            FileType::Tar => {
+                let mut decoder = tar::Archive::new(fd);
+                for entry in decoder.entries()? {
+                    let entry = entry?;
+                    let new_output = self.with_path(entry.path()?.to_str()
+                        .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
+                                                      format!("tar path contains invalid utf-8: {:?}",
+                                                              entry.path_bytes())))?);
+
+                    new_output.unpack(Box::new(TempFileTee::new(entry)?))?;
+                }
+                Ok(())
+            },
+            FileType::Zip => {
+                if let Some(seekable) = fd.as_seekable() {
+                    return self.process_zip(seekable);
+                }
+
+                let mut temp = tempfile()?;
+                io::copy(&mut fd, &mut temp)?;
+                self.process_zip(temp)
+            },
+            FileType::Other => {
+                Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
+            },
+        }
+    }
+
+
+    fn is_format_error_result(&self, error: &io::Error) -> io::Result<bool> {
+        if let Some(specific) = is_format_error(error) {
+            match specific {
+                FormatErrorType::Other => {
+                    self.log(1, || format!(
+                        "thought we could unpack '{:?}' but we couldn't: {}",
+                        self.path, error))?;
+                },
+                FormatErrorType::Rewind => {},
+            }
+
+            return Ok(true);
+        }
+        return Ok(false);
+    }
+
+    fn unpack(&self, mut fd: Box<Tee>) -> io::Result<()> {
+        let res = self.unpack_or_die(&mut fd);
+
+        if let Err(ref error) = res {
+            if self.is_format_error_result(&error)? {
+                self.complete(fd)?;
+                return Ok(());
+            }
         }
 
-        return Ok(true);
+        res
     }
-    return Ok(false);
-}
-
-fn unpack(mut fd: Box<Tee>, output: &OutputTo) -> io::Result<()> {
-    let res = unpack_or_die(&mut fd, output);
-
-    if let Err(ref error) = res {
-        if is_format_error_result(&error, output)? {
-            output.complete(fd)?;
-            return Ok(());
-        }
-    }
-
-    res
 }
 
 fn process_real_path(path: &str, options: &Options) -> io::Result<()> {
     let file = fs::File::open(path)?;
-    let output = OutputTo::from_file(
+    let unpacker = Unpacker::from_file(
         path,
         &file,
         &options,
     )?;
 
-    unpack(Box::new(BufReaderTee::new(file)), &output)
+    unpacker.unpack(Box::new(BufReaderTee::new(file)))
 }
 
 fn must_fit(x: u64) -> u8 {
