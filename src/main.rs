@@ -16,12 +16,17 @@ use std::io;
 use std::time;
 
 use std::rc::Rc;
-use std::vec::Vec;
 
 use clap::{Arg, App};
 
 use libflate::gzip;
 use tempfile::tempfile;
+
+mod filetype;
+use filetype::FileType;
+
+mod slist;
+use slist::Node;
 
 mod tee;
 use tee::*;
@@ -29,48 +34,9 @@ use tee::*;
 mod stat;
 use stat::Stat;
 
-mod filetype;
-use filetype::FileType;
 
 // magic:
 use std::io::Write;
-
-#[derive(Debug)]
-struct Node<T> {
-    next: Option<Rc<Node<T>>>,
-    value: T,
-}
-
-impl<T: Clone> Node<T> {
-    fn head(obj: T) -> Rc<Node<T>> {
-        Rc::new(Node {
-            next: None,
-            value: obj,
-        })
-    }
-
-    fn plus(what: &Rc<Node<T>>, obj: T) -> Rc<Node<T>> {
-        Rc::new(Node {
-            next: Some(what.clone()),
-            value: obj
-        })
-    }
-
-    fn to_vec(&self) -> Vec<T> {
-        let mut ret = Vec::new();
-        let mut val = self;
-        loop {
-            ret.push(val.value.clone());
-            if let Some(ref next) = val.next {
-                val = next;
-            } else {
-                break;
-            }
-        }
-        ret.reverse();
-        ret
-    }
-}
 
 struct Options {
     list: bool,
@@ -186,7 +152,7 @@ impl<'a> Unpacker<'a> {
     }
 
     fn strip_compression_suffix(&self, suffix: &str) -> &str {
-        let our_name = self.current.path.value.as_str();
+        let our_name = self.current.path.inner().as_str();
         if our_name.ends_with(suffix) {
             &our_name[..our_name.len() - suffix.len()]
         } else {
