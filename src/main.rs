@@ -25,6 +25,8 @@ use tempfile::tempfile;
 mod tee;
 use tee::*;
 
+mod stat;
+
 // magic:
 use std::io::Write;
 
@@ -138,6 +140,7 @@ impl<'a> Unpacker<'a> {
 
     fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> io::Result<Unpacker<'b>> {
         let meta = fd.metadata()?;
+        let stat = stat::Stat::from(&meta);
         Ok(Unpacker {
             options,
             current: FileDetails {
@@ -145,10 +148,10 @@ impl<'a> Unpacker<'a> {
                 path: Node::head(path.to_string()),
                 atime: meta.accessed().map(simple_time_sys)?,
                 mtime: meta.modified().map(simple_time_sys)?,
-                ctime: simple_time_ctime(&meta),
+                ctime: simple_time_ctime(&stat),
                 btime: simple_time_btime(&meta)?,
-                uid: 0, // TODO
-                gid: 0, // TODO
+                uid: stat.uid,
+                gid: stat.gid,
                 user_name: String::new(), // TODO
                 group_name: String::new(), // TODO
             },
@@ -247,20 +250,11 @@ fn simple_time_epoch_seconds(seconds: u64) -> u64 {
     seconds.checked_mul(1_000_000_000).unwrap_or(0)
 }
 
-// TODO: I really feel this should be exposed by Rust, without cfg.
-fn simple_time_ctime(val: &fs::Metadata) -> u64 {
-    #[cfg(target_os = "linux")] {
-        use std::os::linux::fs::MetadataExt;
-        let ctime: i64 = val.st_ctime();
-        if ctime <= 0 {
-            0
-        } else {
-            ctime as u64
-        }
-    }
-
-    #[cfg(not(target_os="linux"))] {
+fn simple_time_ctime(val: &stat::Stat) -> u64 {
+    if val.ctime <= 0 {
         0
+    } else {
+        (val.ctime as u64).checked_mul(1_000_000_000).unwrap_or(0) + (val.ctime_nano as u64)
     }
 }
 
