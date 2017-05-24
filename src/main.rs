@@ -5,6 +5,7 @@ extern crate libflate;
 extern crate tar;
 extern crate tempfile;
 extern crate time as crates_time;
+extern crate users;
 extern crate xz2;
 extern crate zip;
 
@@ -152,8 +153,12 @@ impl<'a> Unpacker<'a> {
                 btime: simple_time_btime(&meta)?,
                 uid: stat.uid,
                 gid: stat.gid,
-                user_name: String::new(), // TODO
-                group_name: String::new(), // TODO
+                user_name: users::get_user_by_uid(stat.uid)
+                    .map(|user| user.name().to_string())
+                    .unwrap_or(String::new()),
+                group_name: users::get_group_by_gid(stat.gid)
+                    .map(|group| group.name().to_string())
+                    .unwrap_or(String::new()),
             },
         })
     }
