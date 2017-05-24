@@ -78,6 +78,10 @@ struct FileDetails {
     mtime: u64,
     ctime: u64,
     btime: u64,
+    uid: u32,
+    gid: u32,
+    user_name: String,
+    group_name: String,
 }
 
 struct Unpacker<'a> {
@@ -111,10 +115,11 @@ impl<'a> Unpacker<'a> {
     fn complete_details<R: io::Read>(&self, mut src: R, size: u64) -> io::Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-        writeln!(stdout, "{:?} {} {} {} {} {}",
+        writeln!(stdout, "{:?} {} {} {} {} {} {} {} {} {}",
                  self.current.path.to_vec(),
                  size,
-                 self.current.atime, self.current.mtime, self.current.ctime, self.current.btime
+                 self.current.atime, self.current.mtime, self.current.ctime, self.current.btime,
+                 self.current.uid, self.current.gid, self.current.user_name, self.current.group_name,
         )?;
 
         if self.options.list {
@@ -142,6 +147,10 @@ impl<'a> Unpacker<'a> {
                 mtime: meta.modified().map(simple_time_sys)?,
                 ctime: simple_time_ctime(&meta),
                 btime: simple_time_btime(&meta)?,
+                uid: 0, // TODO
+                gid: 0, // TODO
+                user_name: String::new(), // TODO
+                group_name: String::new(), // TODO
             },
         })
     }
@@ -156,6 +165,10 @@ impl<'a> Unpacker<'a> {
                 mtime: 0,
                 ctime: 0,
                 btime: 0,
+                uid: 0,
+                gid: 0,
+                user_name: String::new(),
+                group_name: String::new(),
             },
         }
     }
@@ -230,8 +243,8 @@ fn simple_time_btime(val: &fs::Metadata) -> io::Result<u64> {
     }
 }
 
-fn simple_time_epoch_seconds(seconds: u32) -> u64 {
-    (seconds as u64).checked_mul(1_000_000_000).unwrap_or(0)
+fn simple_time_epoch_seconds(seconds: u64) -> u64 {
+    seconds.checked_mul(1_000_000_000).unwrap_or(0)
 }
 
 // TODO: I really feel this should be exposed by Rust, without cfg.
@@ -407,7 +420,7 @@ impl<'a> Unpacker<'a> {
                 let dec = gzip::Decoder::new(fd)?;
                 let unpacker = {
                     let header = dec.header();
-                    let mtime = simple_time_epoch_seconds(header.modification_time());
+                    let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
                     let name = match header.filename() {
                         Some(ref c_str) => c_str.to_str().map_err(
                             |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
@@ -449,11 +462,27 @@ impl<'a> Unpacker<'a> {
                 let mut decoder = tar::Archive::new(fd);
                 for entry in decoder.entries()? {
                     let entry = entry?;
-                    let unpacker = self.with_path(entry.path()?.to_str()
+                    let mut unpacker = self.with_path(entry.path()?.to_str()
                         .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
                                                       format!("tar path contains invalid utf-8: {:?}",
                                                               entry.path_bytes())))?);
-
+                    {
+                        let current = &mut unpacker.current;
+                        let header = entry.header();
+                        current.uid = header.uid()?;
+                        current.gid = header.gid()?;
+                        current.mtime = simple_time_epoch_seconds(header.mtime()?);
+                        if let Some(found) = header.username()
+                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
+                                                        format!("invalid username in tar: {} {:?}", e, header.username_bytes())))? {
+                            current.user_name = found.to_string();
+                        }
+                        if let Some(found) = header.groupname()
+                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
+                                                        format!("invalid groupname in tar: {} {:?}", e, header.groupname_bytes())))? {
+                            current.group_name = found.to_string();
+                        }
+                    }
                     unpacker.unpack(Box::new(TempFileTee::new(entry)?))?;
                 }
                 Ok(())
