@@ -370,11 +370,11 @@ impl<'a> Unpacker<'a> {
         for i in 0..zip.len() {
             let res = {
                 let entry = zip.by_index(i)?;
-                let mut new_output = self.with_path(entry.name());
+                let mut unpacker = self.with_path(entry.name());
 
-                new_output.current.mtime = simple_time_tm(entry.last_modified());
+                unpacker.current.mtime = simple_time_tm(entry.last_modified());
                 let mut failing: Box<Tee> = Box::new(FailingTee::new(entry));
-                new_output.unpack_or_die(&mut failing)
+                unpacker.unpack_or_die(&mut failing)
             };
 
             if let Err(ref error) = res {
@@ -405,7 +405,7 @@ impl<'a> Unpacker<'a> {
         match identity {
             FileType::GZip => {
                 let dec = gzip::Decoder::new(fd)?;
-                let new_output = {
+                let unpacker = {
                     let header = dec.header();
                     let mtime = simple_time_epoch_seconds(header.modification_time());
                     let name = match header.filename() {
@@ -416,32 +416,32 @@ impl<'a> Unpacker<'a> {
                         None => self.strip_compression_suffix(".gz"),
                     };
 
-                    let mut new_output = self.with_path(name);
-                    new_output.current.mtime = mtime;
-                    new_output
+                    let mut unpacker = self.with_path(name);
+                    unpacker.current.mtime = mtime;
+                    unpacker
                 };
                 let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
-                new_output.unpack_or_die(&mut failing)
+                unpacker.unpack_or_die(&mut failing)
             },
 
             // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
             FileType::Xz => {
-                let new_output = self.with_path(self.strip_compression_suffix(".xz"));
+                let unpacker = self.with_path(self.strip_compression_suffix(".xz"));
                 let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(fd)));
-                new_output.unpack_or_die(&mut failing)
+                unpacker.unpack_or_die(&mut failing)
             },
             FileType::BZip2 => {
-                let new_output = self.with_path(self.strip_compression_suffix(".bz2"));
+                let unpacker = self.with_path(self.strip_compression_suffix(".bz2"));
                 let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(fd)));
-                new_output.unpack_or_die(&mut failing)
+                unpacker.unpack_or_die(&mut failing)
             }
 
             FileType::Deb => {
                 let mut decoder = ar::Archive::new(fd);
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
-                    let new_output = self.with_path(entry.header().identifier());
-                    new_output.unpack(Box::new(TempFileTee::new(entry)?))?;
+                    let unpacker = self.with_path(entry.header().identifier());
+                    unpacker.unpack(Box::new(TempFileTee::new(entry)?))?;
                 }
                 Ok(())
             },
@@ -449,12 +449,12 @@ impl<'a> Unpacker<'a> {
                 let mut decoder = tar::Archive::new(fd);
                 for entry in decoder.entries()? {
                     let entry = entry?;
-                    let new_output = self.with_path(entry.path()?.to_str()
+                    let unpacker = self.with_path(entry.path()?.to_str()
                         .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
                                                       format!("tar path contains invalid utf-8: {:?}",
                                                               entry.path_bytes())))?);
 
-                    new_output.unpack(Box::new(TempFileTee::new(entry)?))?;
+                    unpacker.unpack(Box::new(TempFileTee::new(entry)?))?;
                 }
                 Ok(())
             },
