@@ -14,6 +14,7 @@ use std::error;
 use std::fmt;
 use std::fs;
 use std::io;
+use std::path;
 use std::process;
 use std::time;
 
@@ -299,7 +300,7 @@ fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
         _ => {},
     }
 
-    panic!("don't know if {:?} / {:?} / {:?} is a format error", e, e.kind(), e.get_ref())
+    None
 }
 
 impl<'a> Unpacker<'a> {
@@ -508,15 +509,29 @@ impl<'a> Unpacker<'a> {
     }
 }
 
-fn process_real_path(path: &str, options: &Options) -> io::Result<()> {
-    let file = fs::File::open(path)?;
-    let unpacker = Unpacker::from_file(
-        path,
-        &file,
-        &options,
-    )?;
+fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> io::Result<()> {
+    let path = path.as_ref();
 
-    unpacker.unpack(Box::new(BufReaderTee::new(file)))
+    if !path.is_dir() {
+        let file = fs::File::open(path)?;
+
+        let unpacker = Unpacker::from_file(
+            path.to_str()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput,
+                                              format!("non-utf-8 filename found: {:?}", path)))?,
+            &file,
+            &options,
+        )?;
+
+        return unpacker.unpack(Box::new(BufReaderTee::new(file)));
+    }
+
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+        process_real_path(path, &options)?;
+    }
+    Ok(())
 }
 
 fn must_fit(x: u64) -> u8 {
@@ -610,7 +625,7 @@ fn real_main() -> u8 {
 
     for path in matches.values_of("INPUT").unwrap() {
         if let Err(e) = process_real_path(path, &options) {
-            if let Err(_) = writeln!(io::stderr(), "fatal: processing '{}': {}", path, e) {
+            if let Err(_) = writeln!(io::stderr(), "fatal: processing '{}': {:?}", path, e) {
                 return 6;
             }
 
