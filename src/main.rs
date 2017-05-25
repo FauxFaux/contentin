@@ -36,8 +36,19 @@ use stat::Stat;
 // magic:
 use std::io::Write;
 
+enum ListingOutput {
+    None,
+    Find,
+}
+
+enum ContentOutput {
+    None,
+    Raw,
+}
+
 struct Options {
-    list: bool,
+    listing_output: ListingOutput,
+    content_output: ContentOutput,
     max_depth: u32,
     verbose: u8,
 }
@@ -86,25 +97,32 @@ impl<'a> Unpacker<'a> {
     fn complete_details<R: io::Read>(&self, mut src: R, size: u64) -> io::Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-        writeln!(stdout, "{:?} {} {} {} {} {} {} {} {} {}",
-                 self.current.path.to_vec(),
-                 size,
-                 self.current.atime, self.current.mtime, self.current.ctime, self.current.btime,
-                 self.current.uid, self.current.gid, self.current.user_name, self.current.group_name,
-        )?;
 
-        if self.options.list {
-            return Ok(())
+        match self.options.listing_output {
+            ListingOutput::None => {},
+            ListingOutput::Find => {
+                writeln!(stdout, "{} {} {} {} {} {} {} {} {} {}",
+                         self.current.path.to_vec().join(" / "),
+                         size,
+                         self.current.atime, self.current.mtime, self.current.ctime, self.current.btime,
+                         self.current.uid, self.current.gid, self.current.user_name, self.current.group_name,
+                )?;
+            },
         }
 
-        io::copy(&mut src, &mut stdout).and_then(move |written|
-            if written != size {
-                Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    format!("expecting to write {} but wrote {}", size, written)))
-            } else {
-                Ok(())
-            })
+        match self.options.content_output {
+            ContentOutput::None => Ok(()),
+            ContentOutput::Raw => {
+                io::copy(&mut src, &mut stdout).and_then(move |written|
+                    if written != size {
+                        Err(io::Error::new(
+                            io::ErrorKind::UnexpectedEof,
+                            format!("expecting to write {} but wrote {}", size, written)))
+                    } else {
+                        Ok(())
+                    })
+            }
+        }
     }
 
     fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> io::Result<Unpacker<'b>> {
@@ -498,8 +516,16 @@ fn real_main() -> u8 {
                         .multiple(true))
                     .get_matches();
 
+    let mut listing_output = ListingOutput::Find;
+    let mut content_output = ContentOutput::Raw;
+
+    if matches.is_present("list") {
+        content_output = ContentOutput::None;
+    }
+
     let options = Options {
-        list: matches.is_present("list"),
+        listing_output,
+        content_output,
         max_depth: matches.value_of("max-depth").unwrap().parse().unwrap(),
         verbose: must_fit(matches.occurrences_of("v")),
     };
