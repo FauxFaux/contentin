@@ -3,6 +3,8 @@ use std::io;
 
 use tempfile::tempfile;
 
+use ::Unpacker;
+
 // magic
 use std::io::Seek;
 use std::io::Write;
@@ -35,7 +37,7 @@ pub fn read_all<R: io::Read>(mut reader: &mut R, mut buf: &mut [u8]) -> io::Resu
 }
 
 impl TempFileTee {
-    pub fn new<U: io::Read>(mut from: U) -> io::Result<Box<Tee>> {
+    pub fn if_necessary<U: io::Read>(mut from: U, log: &Unpacker) -> io::Result<Box<Tee>> {
         const MEM_LIMIT: usize = 32 * 1024;
         let mut buf = [0u8; MEM_LIMIT];
         let read = read_all(&mut from, &mut buf)?;
@@ -49,7 +51,7 @@ impl TempFileTee {
             let mut writer = io::BufWriter::new(&tmp);
             writer.write_all(&buf)?;
             let written = io::copy(&mut from, &mut writer)?;
-            println!("temp file: {}", written);
+            log.log(3, || format!("file spills to temp file: {}kB", (MEM_LIMIT as u64 + written) / 1024))?;
         }
 
         tmp.seek(BEGINNING)?;

@@ -55,7 +55,7 @@ struct FileDetails {
     group_name: String,
 }
 
-struct Unpacker<'a> {
+pub struct Unpacker<'a> {
     options: &'a Options,
     current: FileDetails,
 }
@@ -312,7 +312,7 @@ impl<'a> Unpacker<'a> {
 
                 if self.is_format_error_result(&attempt)? {
                     fd.reset()?;
-                    unpacker.complete(TempFileTee::new(gzip::Decoder::new(fd)?)?)?;
+                    unpacker.complete(TempFileTee::if_necessary(gzip::Decoder::new(fd)?, &unpacker)?)?;
                     Ok(())
                 } else {
                     attempt
@@ -334,7 +334,7 @@ impl<'a> Unpacker<'a> {
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
                     let unpacker = self.with_path(entry.header().identifier());
-                    unpacker.unpack(TempFileTee::new(entry)?)?;
+                    unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)?;
                 }
                 Ok(())
             },
@@ -363,7 +363,7 @@ impl<'a> Unpacker<'a> {
                             current.group_name = found.to_string();
                         }
                     }
-                    unpacker.unpack(TempFileTee::new(entry)?)?;
+                    unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)?;
                 }
                 Ok(())
             },
@@ -392,7 +392,7 @@ impl<'a> Unpacker<'a> {
 
         if self.is_format_error_result(&attempt)? {
             fd.reset()?;
-            self.complete(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?)?;
+            self.complete(TempFileTee::if_necessary(xz2::bufread::XzDecoder::new(fd), self)?)?;
             Ok(())
         } else {
             attempt
@@ -409,7 +409,7 @@ impl<'a> Unpacker<'a> {
 
         if self.is_format_error_result(&attempt)? {
             fd.reset()?;
-            self.complete(TempFileTee::new(bzip2::read::BzDecoder::new(fd))?)?;
+            self.complete(TempFileTee::if_necessary(bzip2::read::BzDecoder::new(fd), self)?)?;
             Ok(())
         } else {
             attempt
