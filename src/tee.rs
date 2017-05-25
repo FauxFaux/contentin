@@ -196,6 +196,29 @@ impl<R: io::Read> Seeker for io::BufReader<R>
     where R: io::Seek {
 }
 
+pub struct BoxReader<'a, R: io::Read + 'a> {
+    pub inner: &'a mut R,
+}
+
+impl<'a, R: io::Read> io::Read for BoxReader<'a, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl<'a, R> io::BufRead for BoxReader<'a, R>
+where R: io::BufRead {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.inner.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.inner.consume(amt)
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use tee;
