@@ -2,6 +2,7 @@ extern crate ar;
 extern crate bzip2;
 extern crate clap;
 extern crate libflate;
+extern crate regex;
 extern crate tar;
 extern crate tempfile;
 extern crate time as crates_time;
@@ -19,6 +20,7 @@ use std::time;
 use clap::{Arg, App};
 
 use libflate::gzip;
+use regex::Regex;
 use tempfile::tempfile;
 
 mod filetype;
@@ -35,6 +37,7 @@ use stat::Stat;
 
 
 // magic:
+use std::io::BufRead;
 use std::io::Write;
 
 enum ListingOutput {
@@ -46,6 +49,7 @@ enum ContentOutput {
     None,
     Raw,
     ToCommand(String),
+    Grep(Regex),
 }
 
 struct Options {
@@ -100,11 +104,13 @@ impl<'a> Unpacker<'a> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
 
+        let current_path = || self.current.path.to_vec().join(" / ");
+
         match self.options.listing_output {
             ListingOutput::None => {},
             ListingOutput::Find => {
                 writeln!(stdout, "{} {} {} {} {} {} {} {} {} {}",
-                         self.current.path.to_vec().join(" / "),
+                         current_path(),
                          size,
                          self.current.atime, self.current.mtime, self.current.ctime, self.current.btime,
                          self.current.uid, self.current.gid, self.current.user_name, self.current.group_name,
@@ -127,7 +133,7 @@ impl<'a> Unpacker<'a> {
             ContentOutput::ToCommand(ref cmd) => {
                 let mut child = process::Command::new("sh")
                     .args(&["-c", cmd])
-                    .env("TAR_REALNAME", self.current.path.to_vec().join(" / "))
+                    .env("TAR_REALNAME", current_path())
                     .env("TAR_SIZE", format!("{}", size))
                     .stdin(process::Stdio::piped())
                     .stdout(process::Stdio::inherit())
@@ -138,6 +144,21 @@ impl<'a> Unpacker<'a> {
 
                 assert!(child.wait()?.success());
 
+                Ok(())
+            },
+            ContentOutput::Grep(ref expr) => {
+                let current_path = current_path();
+                let reader = io::BufReader::new(src);
+                for (no, line) in reader.lines().enumerate() {
+                    if line.is_err() {
+                        self.log(1, || format!("non-utf-8 file ignored: {}", current_path))?;
+                        break;
+                    }
+                    let line = line?;
+                    if expr.is_match(line.as_str()) {
+                        println!("{}:{}:{}", current_path, no+1, line);
+                    }
+                }
                 Ok(())
             }
         }
@@ -537,6 +558,12 @@ fn real_main() -> u8 {
 //                            "ignore",
 //                        ])
 //                        .requires("to-command"))
+                    .arg(Arg::with_name("grep")
+                        .short("S")
+                        .long("grep")
+                        .takes_value(true)
+                        .conflicts_with("to-command")
+                        .help("search for a string in all files"))
                     .arg(Arg::with_name("max-depth")
                         .short("d")
                         .long("max-depth")
@@ -568,6 +595,10 @@ fn real_main() -> u8 {
 
     if let Some(cmd) = matches.value_of("to-command") {
         content_output = ContentOutput::ToCommand(cmd.to_string());
+    }
+
+    if let Some(expr) = matches.value_of("grep") {
+        content_output = ContentOutput::Grep(Regex::new(expr).expect("valid regex"));
     }
 
     let options = Options {
