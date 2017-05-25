@@ -13,6 +13,7 @@ use std::error;
 use std::fmt;
 use std::fs;
 use std::io;
+use std::process;
 use std::time;
 
 use clap::{Arg, App};
@@ -44,6 +45,7 @@ enum ListingOutput {
 enum ContentOutput {
     None,
     Raw,
+    ToCommand(String),
 }
 
 struct Options {
@@ -121,6 +123,22 @@ impl<'a> Unpacker<'a> {
                     } else {
                         Ok(())
                     })
+            },
+            ContentOutput::ToCommand(ref cmd) => {
+                let mut child = process::Command::new("sh")
+                    .args(&["-c", cmd])
+                    .env("TAR_REALNAME", self.current.path.to_vec().join(" / "))
+                    .env("TAR_SIZE", format!("{}", size))
+                    .stdin(process::Stdio::piped())
+                    .stdout(process::Stdio::inherit())
+                    .stderr(process::Stdio::inherit())
+                    .spawn()?;
+
+                assert_eq!(size, io::copy(&mut src, &mut child.stdin.as_mut().unwrap())?);
+
+                assert!(child.wait()?.success());
+
+                Ok(())
             }
         }
     }
@@ -497,7 +515,28 @@ fn real_main() -> u8 {
                     .arg(Arg::with_name("list")
                         .short("t")
                         .long("list")
+                        .conflicts_with("to-command")
                         .help("Show headers only, not object content"))
+                    .arg(Arg::with_name("no-listing")
+                        .short("n")
+                        .long("no-listing")
+                        .conflicts_with("list")
+                        .help("don't print the listing at all"))
+                    .arg(Arg::with_name("to-command")
+                        .long("to-command")
+                        .takes_value(true)
+                        .use_delimiter(false)
+                        .help("Execute a command for each file; contents on stdin. See man:tar(1)"))
+//                    .arg(Arg::with_name("command-failure")
+//                        .long("command-failure")
+//                        .takes_value(true)
+//                        .use_delimiter(false)
+//                        .default_value("fatal")
+//                        .possible_values(&[
+//                            "fatal",
+//                            "ignore",
+//                        ])
+//                        .requires("to-command"))
                     .arg(Arg::with_name("max-depth")
                         .short("d")
                         .long("max-depth")
@@ -521,6 +560,14 @@ fn real_main() -> u8 {
 
     if matches.is_present("list") {
         content_output = ContentOutput::None;
+    }
+
+    if matches.is_present("no-listing") {
+        listing_output = ListingOutput::None;
+    }
+
+    if let Some(cmd) = matches.value_of("to-command") {
+        content_output = ContentOutput::ToCommand(cmd.to_string());
     }
 
     let options = Options {
