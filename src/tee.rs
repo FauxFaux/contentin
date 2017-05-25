@@ -5,6 +5,7 @@ use tempfile::tempfile;
 
 // magic
 use std::io::Seek;
+use std::io::Write;
 
 pub trait Tee: io::BufRead {
     fn reset(&mut self) -> io::Result<()>;
@@ -16,16 +17,39 @@ pub struct TempFileTee {
     inner: io::BufReader<fs::File>,
 }
 
+pub fn read_all<R: io::Read>(mut reader: &mut R, mut buf: &mut [u8]) -> io::Result<usize> {
+    let mut pos = 0;
+    loop {
+        match reader.read(&mut buf[pos..]) {
+            Ok(0) => return Ok(pos),
+            Ok(n) => {
+                pos += n;
+                if pos == buf.len() {
+                    return Ok(pos);
+                }
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 impl TempFileTee {
-    pub fn new<U: io::Read>(from: U) -> io::Result<Box<Tee>> {
-        // TODO: take a size hint, and consider using memory, or shm,
-        // TODO: or take a temp file path, or..
+    pub fn new<U: io::Read>(mut from: U) -> io::Result<Box<Tee>> {
+        const MEM_LIMIT: usize = 32 * 1024;
+        let mut buf = [0u8; MEM_LIMIT];
+        let read = read_all(&mut from, &mut buf)?;
+        if read < MEM_LIMIT {
+            return Ok(Box::new(BufReaderTee::new(io::Cursor::new(buf[..read].to_vec()))));
+        }
+
         let mut tmp = tempfile()?;
 
         {
-            let mut reader = io::BufReader::new(from);
             let mut writer = io::BufWriter::new(&tmp);
-            io::copy(&mut reader, &mut writer)?;
+            writer.write_all(&buf)?;
+            let written = io::copy(&mut from, &mut writer)?;
+            println!("temp file: {}", written);
         }
 
         tmp.seek(BEGINNING)?;
@@ -170,4 +194,66 @@ pub trait Seeker: io::Seek + io::Read {
 
 impl<R: io::Read> Seeker for io::BufReader<R>
     where R: io::Seek {
+}
+
+#[cfg(test)]
+mod tests {
+    use tee;
+
+    use std::cmp::min;
+    use std::io;
+
+    struct Readie {
+        limit: usize,
+        len: usize,
+    }
+
+    impl io::Read for Readie {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let to_take = min(buf.len(), min(self.limit, self.len));
+
+            for i in 0..to_take {
+                buf[i] = (i + 1) as u8;
+            }
+
+            self.len -= to_take;
+            Ok(to_take)
+        }
+    }
+
+    #[test]
+    fn repeated_read_short() {
+        let mut r = Readie {
+            limit: 1,
+            len: 5,
+        };
+        let mut a = [0u8; 8];
+        assert_eq!(5, tee::read_all(&mut r, &mut a).expect("read"));
+        assert_eq!([1, 1, 1, 1, 1, 0, 0, 0], a);
+    }
+
+
+    #[test]
+    fn repeated_read_over() {
+        let mut r = Readie {
+            limit: 2,
+            len: 12,
+        };
+        let mut a = [0u8; 8];
+        assert_eq!(8, tee::read_all(&mut r, &mut a).expect("read"));
+        assert_eq!([1, 2, 1, 2, 1, 2, 1, 2], a);
+    }
+
+    #[test]
+    fn repeated_read_whole() {
+        let mut r = Readie {
+            limit: 12,
+            len: 8,
+        };
+        let mut a = [0u8; 8];
+        assert_eq!(8, tee::read_all(&mut r, &mut a).expect("read"));
+        assert_eq!([1, 2, 3, 4, 5, 6, 7, 8], a);
+    }
+
+
 }
