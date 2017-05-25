@@ -277,6 +277,21 @@ impl<'a> Unpacker<'a> {
         Ok(())
     }
 
+    fn with_gzip(&self, header: &gzip::Header) -> io::Result<Unpacker> {
+        let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
+        let name = match header.filename() {
+            Some(ref c_str) => c_str.to_str().map_err(
+                |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
+                                          format!("gzip member's name must be valid utf-8: {} {:?}",
+                                                  not_utf8, c_str.as_bytes())))?,
+            None => self.strip_compression_suffix(".gz"),
+        };
+
+        let mut unpacker = self.with_path(name);
+        unpacker.current.mtime = mtime;
+        Ok(unpacker)
+    }
+
     fn unpack_or_die<'b>(&self, mut fd: &mut Box<Tee + 'b>) -> io::Result<()> {
         if self.current.depth >= self.options.max_depth {
             return Err(io::Error::new(io::ErrorKind::Other, Rewind {}));
@@ -286,35 +301,34 @@ impl<'a> Unpacker<'a> {
         self.log(2, || format!("identified as {}", identity))?;
         match identity {
             FileType::GZip => {
-                let dec = gzip::Decoder::new(fd)?;
-                let unpacker = {
-                    let header = dec.header();
-                    let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
-                    let name = match header.filename() {
-                        Some(ref c_str) => c_str.to_str().map_err(
-                            |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
-                                                      format!("gzip member's name must be valid utf-8: {} {:?}",
-                                                              not_utf8, c_str.as_bytes())))?,
-                        None => self.strip_compression_suffix(".gz"),
-                    };
+                let (attempt, unpacker) = {
+                    let br = BoxReader { inner: fd };
+                    let dec = gzip::Decoder::new(br)?;
 
-                    let mut unpacker = self.with_path(name);
-                    unpacker.current.mtime = mtime;
-                    unpacker
+                    let unpacker = self.with_gzip(dec.header())?;
+
+                    let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
+                    (unpacker.unpack_or_die(&mut failing), unpacker)
                 };
-                let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
-                unpacker.unpack_or_die(&mut failing)
+
+
+                if self.is_format_error_result(&attempt)? {
+                    fd.reset()?;
+                    unpacker.complete(TempFileTee::new(gzip::Decoder::new(fd)?)?)?;
+                    Ok(())
+                } else {
+                    attempt
+                }
             },
 
             // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
             FileType::Xz => {
-                let unpacker = self.with_path(self.strip_compression_suffix(".xz"));
-                unpacker.unpack_stream(fd)
+                self.with_path(self.strip_compression_suffix(".xz"))
+                    .unpack_stream_xz(fd)
             },
             FileType::BZip2 => {
-                let unpacker = self.with_path(self.strip_compression_suffix(".bz2"));
-                let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(fd)));
-                unpacker.unpack_or_die(&mut failing)
+                self.with_path(self.strip_compression_suffix(".bz2"))
+                    .unpack_stream_bz2(fd)
             }
 
             FileType::Deb => {
@@ -370,7 +384,8 @@ impl<'a> Unpacker<'a> {
         }
     }
 
-    fn unpack_stream<'c>(&self, fd: &mut Box<Tee + 'c>) -> io::Result<()> {
+    // TODO: Work out how to generic these copy-pastes
+    fn unpack_stream_xz<'c>(&self, fd: &mut Box<Tee + 'c>) -> io::Result<()> {
         let attempt = {
             let br = BoxReader { inner: fd };
             let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(br)));
@@ -380,6 +395,23 @@ impl<'a> Unpacker<'a> {
         if self.is_format_error_result(&attempt)? {
             fd.reset()?;
             self.complete(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?)?;
+            Ok(())
+        } else {
+            attempt
+        }
+    }
+
+    // TODO: copy-paste of unpack_stream_xz
+    fn unpack_stream_bz2<'c>(&self, fd: &mut Box<Tee + 'c>) -> io::Result<()> {
+        let attempt = {
+            let br = BoxReader { inner: fd };
+            let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(br)));
+            self.unpack_or_die(&mut failing)
+        };
+
+        if self.is_format_error_result(&attempt)? {
+            fd.reset()?;
+            self.complete(TempFileTee::new(bzip2::read::BzDecoder::new(fd))?)?;
             Ok(())
         } else {
             attempt
