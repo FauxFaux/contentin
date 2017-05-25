@@ -30,18 +30,32 @@ impl<T: Clone> SList<T> {
     }
 
     pub fn to_vec(&self) -> Vec<T> {
-        let mut ret = Vec::new();
-        let mut val = &self.head;
-        loop {
-            ret.push(val.value.clone());
-            if let Some(ref next) = val.next {
-                val = next;
-            } else {
-                break;
-            }
-        }
+        let mut ret: Vec<T> = self.iter().collect();
         ret.reverse();
         ret
+    }
+
+    pub fn iter(&self) -> SListIter<T> {
+        SListIter {
+            next: Some(self.head.clone())
+        }
+    }
+}
+
+pub struct SListIter<T> {
+    next: Option<Rc<Node<T>>>,
+}
+
+impl<T: Clone> Iterator for SListIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next.is_none() {
+            return None;
+        }
+        let list = self.next.as_ref().unwrap().clone();
+        self.next = list.next.clone();
+        Some(list.value.clone())
     }
 }
 
