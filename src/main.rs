@@ -309,19 +309,7 @@ impl<'a> Unpacker<'a> {
             // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
             FileType::Xz => {
                 let unpacker = self.with_path(self.strip_compression_suffix(".xz"));
-                let attempt = {
-                    let br = BoxReader { inner: fd };
-                    let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(br)));
-                    unpacker.unpack_or_die(&mut failing)
-                };
-
-                if self.is_format_error_result(&attempt)? {
-                    fd.reset()?;
-                    self.complete(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?)?;
-                    Ok(())
-                } else {
-                    attempt
-                }
+                unpacker.unpack_stream(fd)
             },
             FileType::BZip2 => {
                 let unpacker = self.with_path(self.strip_compression_suffix(".bz2"));
@@ -382,6 +370,21 @@ impl<'a> Unpacker<'a> {
         }
     }
 
+    fn unpack_stream<'c>(&self, fd: &mut Box<Tee + 'c>) -> io::Result<()> {
+        let attempt = {
+            let br = BoxReader { inner: fd };
+            let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(br)));
+            self.unpack_or_die(&mut failing)
+        };
+
+        if self.is_format_error_result(&attempt)? {
+            fd.reset()?;
+            self.complete(TempFileTee::new(xz2::bufread::XzDecoder::new(fd))?)?;
+            Ok(())
+        } else {
+            attempt
+        }
+    }
 
     fn is_format_error_result<T>(&self, res: &io::Result<T>) -> io::Result<bool> {
         if res.is_ok() {
