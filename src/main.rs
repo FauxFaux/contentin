@@ -15,8 +15,6 @@ use std::fs;
 use std::io;
 use std::time;
 
-use std::rc::Rc;
-
 use clap::{Arg, App};
 
 use libflate::gzip;
@@ -26,7 +24,7 @@ mod filetype;
 use filetype::FileType;
 
 mod slist;
-use slist::Node;
+use slist::SList;
 
 mod tee;
 use tee::*;
@@ -45,7 +43,7 @@ struct Options {
 }
 
 struct FileDetails {
-    path: Rc<Node<String>>,
+    path: SList<String>,
     depth: u32,
     atime: u64,
     mtime: u64,
@@ -116,7 +114,7 @@ impl<'a> Unpacker<'a> {
             options,
             current: FileDetails {
                 depth: 0,
-                path: Node::head(path.to_string()),
+                path: SList::head(path.to_string()),
                 atime: meta.accessed().map(simple_time_sys)?,
                 mtime: meta.modified().map(simple_time_sys)?,
                 ctime: simple_time_ctime(&stat),
@@ -137,7 +135,7 @@ impl<'a> Unpacker<'a> {
         Unpacker {
             options: self.options,
             current: FileDetails {
-                path: Node::plus(&self.current.path, path.to_string()),
+                path: self.current.path.plus(path.to_string()),
                 depth: self.current.depth + 1,
                 atime: 0,
                 mtime: 0,
@@ -430,7 +428,7 @@ impl<'a> Unpacker<'a> {
             match specific {
                 FormatErrorType::Other => {
                     self.log(1, || format!(
-                        "thought we could unpack '{:?}' but we couldn't: {}",
+                        "thought we could unpack '{}' but we couldn't: {}",
                         self.current.path, error))?;
                 },
                 FormatErrorType::Rewind => {},

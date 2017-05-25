@@ -1,29 +1,37 @@
+use std::fmt;
+
 use std::rc::Rc;
 
-#[derive(Debug)]
-pub struct Node<T> {
-    next: Option<Rc<Node<T>>>,
-    value: T,
+pub struct SList<T> {
+    head: Rc<Node<T>>
 }
 
-impl<T: Clone> Node<T> {
-    pub fn head(obj: T) -> Rc<Node<T>> {
-        Rc::new(Node {
-            next: None,
-            value: obj,
-        })
+impl<T: Clone> SList<T> {
+    pub fn head(obj: T) -> SList<T> {
+        SList {
+            head: Rc::new(Node {
+                next: None,
+                value: obj,
+            })
+        }
     }
 
-    pub fn plus(what: &Rc<Node<T>>, obj: T) -> Rc<Node<T>> {
-        Rc::new(Node {
-            next: Some(what.clone()),
-            value: obj
-        })
+    pub fn plus(&self, obj: T) -> SList<T> {
+        SList {
+            head: Rc::new(Node {
+                next: Some(self.head.clone()),
+                value: obj
+            })
+        }
+    }
+
+    pub fn inner(&self) -> &T {
+        &self.head.value
     }
 
     pub fn to_vec(&self) -> Vec<T> {
         let mut ret = Vec::new();
-        let mut val = self;
+        let mut val = &self.head;
         loop {
             ret.push(val.value.clone());
             if let Some(ref next) = val.next {
@@ -35,8 +43,17 @@ impl<T: Clone> Node<T> {
         ret.reverse();
         ret
     }
+}
 
-    pub fn inner(&self) -> &T {
-        &self.value
+impl<T: fmt::Display> fmt::Display for SList<T>
+where T: Clone + fmt::Debug {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.to_vec())
     }
+}
+
+#[derive(Debug)]
+struct Node<T> {
+    next: Option<Rc<Node<T>>>,
+    value: T,
 }
