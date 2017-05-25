@@ -291,6 +291,11 @@ fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
                 if obj.is::<Rewind>() {
                     return Some(FormatErrorType::Rewind);
                 }
+
+
+                if obj.is::<xz2::stream::Error>() {
+                    return Some(FormatErrorType::Other);
+                }
             }
         },
         io::ErrorKind::BrokenPipe
@@ -354,7 +359,7 @@ impl<'a> Unpacker<'a> {
         }
 
         let identity = FileType::identify(fd.fill_buf()?);
-        self.log(2, || format!("identified as {}", identity))?;
+        self.log(2, || format!("identified '{}' as {}", self.current.path.inner(), identity))?;
         match identity {
             FileType::GZip => {
                 let (attempt, unpacker) = {
@@ -486,8 +491,8 @@ impl<'a> Unpacker<'a> {
             match specific {
                 FormatErrorType::Other => {
                     self.log(1, || format!(
-                        "thought we could unpack '{}' but we couldn't: {}",
-                        self.current.path, error))?;
+                        "thought we could unpack '{}' but we couldn't: {:?} {}",
+                        self.current.path, error, error))?;
                 },
                 FormatErrorType::Rewind => {},
             }
