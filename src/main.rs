@@ -325,7 +325,7 @@ impl<'a> Unpacker<'a> {
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
                     let unpacker = self.with_path(entry.header().identifier());
-                    unpacker.unpack(Box::new(TempFileTee::new(entry)?))?;
+                    unpacker.unpack(TempFileTee::new(entry)?)?;
                 }
                 Ok(())
             },
@@ -354,7 +354,7 @@ impl<'a> Unpacker<'a> {
                             current.group_name = found.to_string();
                         }
                     }
-                    unpacker.unpack(Box::new(TempFileTee::new(entry)?))?;
+                    unpacker.unpack(TempFileTee::new(entry)?)?;
                 }
                 Ok(())
             },

@@ -17,7 +17,7 @@ pub struct TempFileTee {
 }
 
 impl TempFileTee {
-    pub fn new<U: io::Read>(from: U) -> io::Result<TempFileTee> {
+    pub fn new<U: io::Read>(from: U) -> io::Result<Box<Tee>> {
         // TODO: take a size hint, and consider using memory, or shm,
         // TODO: or take a temp file path, or..
         let mut tmp = tempfile()?;
@@ -30,9 +30,9 @@ impl TempFileTee {
 
         tmp.seek(BEGINNING)?;
 
-        Ok(TempFileTee {
+        Ok(Box::new(TempFileTee {
             inner: io::BufReader::new(tmp),
-        })
+        }))
     }
 }
 
