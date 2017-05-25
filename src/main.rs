@@ -262,13 +262,11 @@ impl<'a> Unpacker<'a> {
                 unpacker.unpack_or_die(&mut failing)
             };
 
-            if let Err(ref error) = res {
-                if self.is_format_error_result(error)? {
-                    let new_entry = zip.by_index(i)?;
-                    let size = new_entry.size();
-                    self.complete_details(new_entry, size)?;
-                    continue;
-                }
+            if self.is_format_error_result(&res)? {
+                let new_entry = zip.by_index(i)?;
+                let size = new_entry.size();
+                self.complete_details(new_entry, size)?;
+                continue;
             }
 
             // scope based borrow sigh; same block as above
@@ -374,8 +372,15 @@ impl<'a> Unpacker<'a> {
     }
 
 
-    fn is_format_error_result(&self, error: &io::Error) -> io::Result<bool> {
-        if let Some(specific) = is_format_error(error) {
+    fn is_format_error_result<T>(&self, res: &io::Result<T>) -> io::Result<bool> {
+        if res.is_ok() {
+            return Ok(false);
+        }
+
+        // TODO: Ew:
+        let error = res.as_ref().err().unwrap();
+
+        if let Some(specific) = is_format_error(&error) {
             match specific {
                 FormatErrorType::Other => {
                     self.log(1, || format!(
@@ -393,11 +398,9 @@ impl<'a> Unpacker<'a> {
     fn unpack(&self, mut fd: Box<Tee>) -> io::Result<()> {
         let res = self.unpack_or_die(&mut fd);
 
-        if let Err(ref error) = res {
-            if self.is_format_error_result(&error)? {
-                self.complete(fd)?;
-                return Ok(());
-            }
+        if self.is_format_error_result(&res)? {
+            self.complete(fd)?;
+            return Ok(());
         }
 
         res
