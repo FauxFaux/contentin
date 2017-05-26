@@ -1,5 +1,6 @@
 extern crate ar;
 extern crate bzip2;
+extern crate capnp;
 extern crate clap;
 extern crate libflate;
 extern crate regex;
@@ -24,6 +25,8 @@ use libflate::gzip;
 use regex::Regex;
 use tempfile::tempfile;
 
+mod entry_capnp;
+
 mod filetype;
 use filetype::FileType;
 
@@ -43,6 +46,7 @@ use std::io::Write;
 
 enum ListingOutput {
     None,
+    Capnp,
     Find,
 }
 
@@ -60,7 +64,7 @@ struct Options {
     verbose: u8,
 }
 
-struct FileDetails {
+pub struct FileDetails {
     path: SList<String>,
     depth: u32,
     atime: u64,
@@ -117,6 +121,9 @@ impl<'a> Unpacker<'a> {
                          self.current.uid, self.current.gid, self.current.user_name, self.current.group_name,
                 )?;
             },
+            ListingOutput::Capnp => {
+                entry_capnp::write_capnp(&mut stdout, &self.current, size)?;
+            }
         }
 
         match self.options.content_output {
@@ -553,6 +560,17 @@ fn real_main() -> u8 {
                         .short("v")
                         .multiple(true)
                         .help("Sets the level of verbosity (more for more)"))
+                    .arg(Arg::with_name("headers")
+                        .short("h")
+                        .long("headers")
+                        .possible_values(&[
+                            "none",
+                            "find",
+                            "capnp",
+                        ])
+                        .default_value("find")
+                        .help("What format to write file metadata in")
+                    )
                     .arg(Arg::with_name("list")
                         .short("t")
                         .long("list")
@@ -611,6 +629,15 @@ fn real_main() -> u8 {
 
     if matches.is_present("no-listing") {
         listing_output = ListingOutput::None;
+    }
+
+    if let Some(listing_format) = matches.value_of("headers") {
+        listing_output = match listing_format {
+            "none" => ListingOutput::None,
+            "capnp" => ListingOutput::Capnp,
+            "find" => ListingOutput::Find,
+            _ => unreachable!(),
+        }
     }
 
     if let Some(cmd) = matches.value_of("to-command") {

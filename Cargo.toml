@@ -5,6 +5,7 @@ authors = ["Chris West (Faux) <git@goeswhere.com>"]
 
 [dependencies]
 # tool
+capnp = "0.8.10"
 clap = "2.23.3"
 regex = "0.2.2"
 
@@ -23,3 +24,6 @@ time = "0.1.37"
 
 [profile.release]
 lto = true
+
+[build-dependencies]
+capnpc = "0.8.5"
