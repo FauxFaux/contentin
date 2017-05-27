@@ -36,6 +36,11 @@ struct Entry {
         charDevice  @16 :DeviceNumbers;
         blockDevice @17 :DeviceNumbers;
     }
+
+    content :union {
+        absent  @18 :Void;
+        follows @19 :Void;
+    }
 }
 
 struct PosixEntity {

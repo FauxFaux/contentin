@@ -10,6 +10,7 @@ use capnp;
 pub fn write_capnp<W: io::Write>(
     to: &mut W,
     current: &::FileDetails,
+    content_output: &::ContentOutput,
     size: u64) -> io::Result<()> {
 
     let mut message = capnp::message::Builder::new_default();
@@ -54,6 +55,21 @@ pub fn write_capnp<W: io::Write>(
             match size {
                 0 => type_.set_directory(()),
                 _ => type_.set_normal(()),
+            }
+        }
+
+        {
+            let mut content = entry.borrow().get_content();
+            match *content_output {
+                ::ContentOutput::None => {
+                    content.set_absent(());
+                },
+                ::ContentOutput::Raw => {
+                    content.set_follows(());
+                },
+                ::ContentOutput::Grep(_) | ::ContentOutput::ToCommand(_) => {
+                    unreachable!();
+                },
             }
         }
     }

@@ -50,7 +50,7 @@ enum ListingOutput {
     Find,
 }
 
-enum ContentOutput {
+pub enum ContentOutput {
     None,
     Raw,
     ToCommand(String),
@@ -122,7 +122,11 @@ impl<'a> Unpacker<'a> {
                 )?;
             },
             ListingOutput::Capnp => {
-                entry_capnp::write_capnp(&mut stdout, &self.current, size)?;
+                entry_capnp::write_capnp(
+                    &mut stdout,
+                    &self.current,
+                    &self.options.content_output,
+                    size)?;
             }
         }
 
