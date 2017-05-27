@@ -17,20 +17,19 @@ pub fn write_capnp<W: io::Write>(
         let mut entry = message.init_root::<entry::Builder>();
         entry.set_magic(0x0100C1C1);
         entry.set_len(size);
+
+        {
+            let mut paths = entry.borrow().init_paths(current.depth + 1);
+            for (i, path) in current.path.iter().enumerate() {
+                assert!(i < std::u32::MAX as usize);
+                paths.set(i as u32, path.as_str());
+            }
+        }
+
         entry.set_atime(current.atime);
         entry.set_mtime(current.mtime);
         entry.set_ctime(current.ctime);
         entry.set_btime(current.btime);
-
-        {
-            let mut type_ = entry.borrow().get_type();
-
-            // TODO: other file types / proper tracking of this
-            match size {
-                0 => type_.set_directory(()),
-                _ => type_.set_normal(()),
-            }
-        }
 
         {
             let mut posix = entry.borrow().get_ownership().init_posix();
@@ -47,14 +46,16 @@ pub fn write_capnp<W: io::Write>(
 
             // TODO: mode
         }
+
         {
-            let mut paths = entry.init_paths(current.depth + 1);
-            for (i, path) in current.path.iter().enumerate() {
-                assert!(i < std::u32::MAX as usize);
-                paths.set(i as u32, path.as_str());
+            let mut type_ = entry.borrow().get_type();
+
+            // TODO: other file types / proper tracking of this
+            match size {
+                0 => type_.set_directory(()),
+                _ => type_.set_normal(()),
             }
         }
-
     }
     capnp::serialize::write_message(to, &message)
 }
