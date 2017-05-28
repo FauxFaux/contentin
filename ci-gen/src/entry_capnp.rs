@@ -1,6 +1,6 @@
 
 #![allow(unused)]
-include!(concat!(env!("OUT_DIR"), "/entry_capnp.rs"));
+include!(concat!(env!("OUT_DIR"), "/../entry_capnp.rs"));
 
 use std;
 use std::io;

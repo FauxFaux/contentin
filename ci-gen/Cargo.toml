@@ -1,7 +1,8 @@
 [package]
-name = "contentin"
+name = "ci-gen"
 version = "0.1.0"
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
+build = "../ci-shared/build.rs"
 
 [dependencies]
 # tool
