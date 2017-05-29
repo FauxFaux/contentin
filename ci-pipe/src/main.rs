@@ -8,7 +8,20 @@ use clap::{Arg, App, SubCommand};
 
 mod entry_capnp;
 
-fn process_entry<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> io::Result<bool> {
+fn cat<R: io::Read, W: io::Write>(mut from: &mut R, mut to: &mut W) -> io::Result<bool> {
+    let entry = entry_capnp::read_entry(&mut from).expect("TODO: error type mapping");
+    if entry.is_none() {
+        return Ok(false);
+    }
+
+    let entry: entry_capnp::FileEntry = entry.unwrap();
+
+    assert_eq!(entry.len, copy_upto(&mut from, &mut to, entry.len)?);
+
+    Ok(true)
+}
+
+fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> io::Result<bool> {
 
     let entry = entry_capnp::read_entry(&mut from).expect("TODO: error type mapping");
     if entry.is_none() {
@@ -76,6 +89,9 @@ fn join_backwards(what: &Vec<String>, join: &str) -> String {
 
 
 fn main() {
+    let from = io::stdin();
+    let mut from = from.lock();
+
     match App::new("contentin")
         .setting(clap::AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("run")
@@ -98,8 +114,15 @@ fn main() {
                             .help("Command to run, and its arguments")
                             .multiple(true))
         )
+        .subcommand(SubCommand::with_name("cat")
+        )
         .get_matches().subcommand() {
-
+        ("cat", Some(_)) => {
+            let stdout = io::stdout();
+            let mut stdout = stdout.lock();
+            while cat(&mut from, &mut stdout).expect("TODO: handle error") {
+            }
+        }
         ("run", Some(matches)) => {
             let raw_command: Vec<&str> = matches.values_of("command").unwrap().collect();
             let as_dumb_line = raw_command.join(" ");
@@ -110,8 +133,8 @@ fn main() {
                 raw_command
             };
 
-            let stdin = io::stdin();
-            while process_entry(&mut stdin.lock(), &cmd).expect("TODO: handle error") {
+
+            while direct_run(&mut from, &cmd).expect("TODO: handle error") {
             }
         },
         _ => unreachable!(),
