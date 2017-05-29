@@ -67,7 +67,7 @@ pub fn write_capnp<W: io::Write>(
                 ::ContentOutput::Raw => {
                     content.set_follows(());
                 },
-                ::ContentOutput::Grep(_) | ::ContentOutput::ToCommand(_) => {
+                ::ContentOutput::Grep(_) => {
                     unreachable!();
                 },
             }

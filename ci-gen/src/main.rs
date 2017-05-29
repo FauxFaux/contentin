@@ -16,7 +16,6 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path;
-use std::process;
 use std::time;
 
 use clap::{Arg, App};
@@ -53,7 +52,6 @@ enum ListingOutput {
 pub enum ContentOutput {
     None,
     Raw,
-    ToCommand(String),
     Grep(Regex),
 }
 
@@ -141,22 +139,6 @@ impl<'a> Unpacker<'a> {
                     } else {
                         Ok(())
                     })
-            },
-            ContentOutput::ToCommand(ref cmd) => {
-                let mut child = process::Command::new("sh")
-                    .args(&["-c", cmd])
-                    .env("TAR_REALNAME", current_path())
-                    .env("TAR_SIZE", format!("{}", size))
-                    .stdin(process::Stdio::piped())
-                    .stdout(process::Stdio::inherit())
-                    .stderr(process::Stdio::inherit())
-                    .spawn()?;
-
-                assert_eq!(size, io::copy(&mut src, &mut child.stdin.as_mut().unwrap())?);
-
-                assert!(child.wait()?.success());
-
-                Ok(())
             },
             ContentOutput::Grep(ref expr) => {
                 let current_path = current_path();
@@ -585,26 +567,10 @@ fn real_main() -> u8 {
                         .long("no-listing")
                         .conflicts_with("list")
                         .help("don't print the listing at all"))
-                    .arg(Arg::with_name("to-command")
-                        .long("to-command")
-                        .takes_value(true)
-                        .use_delimiter(false)
-                        .help("Execute a command for each file; contents on stdin. See man:tar(1)"))
-//                    .arg(Arg::with_name("command-failure")
-//                        .long("command-failure")
-//                        .takes_value(true)
-//                        .use_delimiter(false)
-//                        .default_value("fatal")
-//                        .possible_values(&[
-//                            "fatal",
-//                            "ignore",
-//                        ])
-//                        .requires("to-command"))
                     .arg(Arg::with_name("grep")
                         .short("S")
                         .long("grep")
                         .takes_value(true)
-                        .conflicts_with("to-command")
                         .help("search for a string in all files"))
                     .arg(Arg::with_name("max-depth")
                         .short("d")
@@ -642,10 +608,6 @@ fn real_main() -> u8 {
             "find" => ListingOutput::Find,
             _ => unreachable!(),
         }
-    }
-
-    if let Some(cmd) = matches.value_of("to-command") {
-        content_output = ContentOutput::ToCommand(cmd.to_string());
     }
 
     if let Some(expr) = matches.value_of("grep") {

@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "ci-gen",
+    "ci-pipe",
+]
+
+[profile.release]
+lto = true
