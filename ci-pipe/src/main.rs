@@ -13,80 +13,81 @@ use std::io::BufRead;
 use std::io::Read;
 use std::io::Write;
 
-fn cat<R: io::Read, W: io::Write>(mut from: &mut R, mut to: &mut W) -> io::Result<bool> {
-    let entry = entry_capnp::read_entry(&mut from).expect("TODO: error type mapping");
-    if entry.is_none() {
-        return Ok(false);
-    }
+fn with_entries<
+    R: io::Read,
+    F: FnMut(&mut R, entry_capnp::FileEntry) -> io::Result<()>
+>(
+    mut from: &mut R,
+    mut work: F
+) -> io::Result<()> {
 
-    let entry: entry_capnp::FileEntry = entry.unwrap();
-
-    assert_eq!(entry.len, copy_upto(&mut from, &mut to, entry.len)?);
-
-    Ok(true)
-}
-
-fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> io::Result<bool> {
-    let entry = entry_capnp::read_entry(&mut from).expect("TODO: error type mapping");
-    if entry.is_none() {
-        return Ok(false);
-    }
-
-    let entry: entry_capnp::FileEntry = entry.unwrap();
-
-    let paths = join_backwards(&entry.paths, "/ /");
-
-    for line in io::BufReader::new((&mut from).take(entry.len)).lines() {
-        match line {
-            Ok(line) => {
-                if regex.is_match(line.as_str()) {
-                    println!("{}:{}", paths, line);
-                }
-            }
-            Err(e) => {
-                write!(io::stderr(), "skipping non-utf-8 ({}) file: {}\n", e, paths)?;
+    loop {
+        match entry_capnp::read_entry(&mut from).expect("TODO: error type mapping") {
+            None => return Ok(()),
+            Some(entry) => if let Err(e) = work(&mut from, entry) {
+                return Err(e);
             }
         }
     }
-
-    Ok(true)
 }
 
-fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> io::Result<bool> {
+fn cat<R: io::Read, W: io::Write>(mut from: &mut R, to: &mut W) -> io::Result<()> {
+    with_entries(&mut from, move |from, entry| {
+        assert_eq!(entry.len, copy_upto(from, to, entry.len)?);
+        Ok(())
+    })
+}
 
-    let entry = entry_capnp::read_entry(&mut from).expect("TODO: error type mapping");
-    if entry.is_none() {
-        return Ok(false);
-    }
+fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> io::Result<()> {
+    with_entries(&mut from, move |mut from, entry| {
+        let paths = join_backwards(&entry.paths, "/ /");
 
-    let entry: entry_capnp::FileEntry = entry.unwrap();
+        for line in io::BufReader::new((&mut from).take(entry.len)).lines() {
+            match line {
+                Ok(line) => {
+                    if regex.is_match(line.as_str()) {
+                        println!("{}:{}", paths, line);
+                    }
+                }
+                Err(e) => {
+                    write!(io::stderr(), "skipping non-utf-8 ({}) file: {}\n", e, paths)?;
+                }
+            }
+        }
 
-    // skip others; assuming they're empty
-    if !entry.normal_file {
-        assert_eq!(0, entry.len);
-        return Ok(true);
-    }
+        Ok(())
+    })
+}
 
-    if !entry.content_follows {
-        return Err(io::Error::new(io::ErrorKind::UnexpectedEof,
-                                  "Can't do anything for contentless streams"));
-    }
+fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> io::Result<()> {
+    with_entries(&mut from, move |mut from, entry| {
+        // skip others; assuming they're empty
+        if !entry.normal_file {
+            assert_eq!(0, entry.len);
+            return Ok(());
+        }
 
-    let mut child = process::Command::new(cmd[0])
-        .args(&cmd[1..])
-        .env("TAR_REALNAME", join_backwards(&entry.paths, "/ /"))
-        .env("TAR_FILENAME", entry.paths[0].to_string())
-        .env("TAR_SIZE", format!("{}", entry.len))
-        .stdin(process::Stdio::piped())
-        .stdout(process::Stdio::inherit())
-        .stderr(process::Stdio::inherit())
-        .spawn()?;
+        if !entry.content_follows {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof,
+                                      "Can't do anything for contentless streams"));
+        }
 
-    assert_eq!(entry.len, copy_upto(&mut from, &mut child.stdin.as_mut().unwrap(), entry.len)?);
+        let mut child = process::Command::new(cmd[0])
+            .args(&cmd[1..])
+            .env("TAR_REALNAME", join_backwards(&entry.paths, "/ /"))
+            .env("TAR_FILENAME", entry.paths[0].to_string())
+            .env("TAR_SIZE", format!("{}", entry.len))
+            .stdin(process::Stdio::piped())
+            .stdout(process::Stdio::inherit())
+            .stderr(process::Stdio::inherit())
+            .spawn()?;
 
-    assert!(child.wait()?.success());
+        assert_eq!(entry.len, copy_upto(&mut from, &mut child.stdin.as_mut().unwrap(), entry.len)?);
 
-    Ok(true)
+        assert!(child.wait()?.success());
+
+        Ok(())
+    })
 }
 
 fn copy_upto<R: ?Sized, W: ?Sized>(reader: &mut R, writer: &mut W, how_much: u64) -> io::Result<u64>
@@ -156,15 +157,13 @@ fn main() {
         ("cat", Some(_)) => {
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
-            while cat(&mut from, &mut stdout).expect("TODO: handle error") {
-            }
+            cat(&mut from, &mut stdout).expect("TODO: handle error");
         }
         ("grep", Some(matches)) => {
             let pattern = matches.value_of("pattern").unwrap();
             match regex::Regex::new(pattern) {
                 Ok(regex) => {
-                    while grep(&mut from, &regex).expect("TODO: handle error") {
-                    }
+                    grep(&mut from, &regex).expect("TODO: handle error")
                 }
                 Err(e) => {
                     println!("invalid regex: {} {}", pattern, e);
@@ -182,9 +181,7 @@ fn main() {
                 raw_command
             };
 
-
-            while direct_run(&mut from, &cmd).expect("TODO: handle error") {
-            }
+            direct_run(&mut from, &cmd).expect("TODO: handle error")
         },
         _ => unreachable!(),
     }
