@@ -8,7 +8,6 @@ build = "../ci-shared/build.rs"
 # tool
 capnp = "0.8.10"
 clap = "2.23.3"
-regex = "0.2.2"
 
 # format support
 ar = "0.2.0"

@@ -3,7 +3,6 @@ extern crate bzip2;
 extern crate capnp;
 extern crate clap;
 extern crate libflate;
-extern crate regex;
 extern crate tar;
 extern crate tempfile;
 extern crate time as crates_time;
@@ -21,7 +20,6 @@ use std::time;
 use clap::{Arg, App};
 
 use libflate::gzip;
-use regex::Regex;
 use tempfile::tempfile;
 
 mod entry_capnp;
@@ -52,7 +50,6 @@ enum ListingOutput {
 pub enum ContentOutput {
     None,
     Raw,
-    Grep(Regex),
 }
 
 struct Options {
@@ -140,21 +137,6 @@ impl<'a> Unpacker<'a> {
                         Ok(())
                     })
             },
-            ContentOutput::Grep(ref expr) => {
-                let current_path = current_path();
-                let reader = io::BufReader::new(src);
-                for (no, line) in reader.lines().enumerate() {
-                    if line.is_err() {
-                        self.log(1, || format!("non-utf-8 file ignored: {}", current_path))?;
-                        break;
-                    }
-                    let line = line?;
-                    if expr.is_match(line.as_str()) {
-                        println!("{}:{}:{}", current_path, no+1, line);
-                    }
-                }
-                Ok(())
-            }
         }
     }
 
@@ -608,10 +590,6 @@ fn real_main() -> u8 {
             "find" => ListingOutput::Find,
             _ => unreachable!(),
         }
-    }
-
-    if let Some(expr) = matches.value_of("grep") {
-        content_output = ContentOutput::Grep(Regex::new(expr).expect("valid regex"));
     }
 
     let options = Options {

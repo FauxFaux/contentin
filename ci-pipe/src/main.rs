@@ -1,5 +1,6 @@
 extern crate capnp;
 extern crate clap;
+extern crate regex;
 
 use std::io;
 use std::process;
@@ -7,6 +8,10 @@ use std::process;
 use clap::{Arg, App, SubCommand};
 
 mod entry_capnp;
+
+use std::io::BufRead;
+use std::io::Read;
+use std::io::Write;
 
 fn cat<R: io::Read, W: io::Write>(mut from: &mut R, mut to: &mut W) -> io::Result<bool> {
     let entry = entry_capnp::read_entry(&mut from).expect("TODO: error type mapping");
@@ -17,6 +22,32 @@ fn cat<R: io::Read, W: io::Write>(mut from: &mut R, mut to: &mut W) -> io::Resul
     let entry: entry_capnp::FileEntry = entry.unwrap();
 
     assert_eq!(entry.len, copy_upto(&mut from, &mut to, entry.len)?);
+
+    Ok(true)
+}
+
+fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> io::Result<bool> {
+    let entry = entry_capnp::read_entry(&mut from).expect("TODO: error type mapping");
+    if entry.is_none() {
+        return Ok(false);
+    }
+
+    let entry: entry_capnp::FileEntry = entry.unwrap();
+
+    let paths = join_backwards(&entry.paths, "/ /");
+
+    for line in io::BufReader::new((&mut from).take(entry.len)).lines() {
+        match line {
+            Ok(line) => {
+                if regex.is_match(line.as_str()) {
+                    println!("{}:{}", paths, line);
+                }
+            }
+            Err(e) => {
+                write!(io::stderr(), "skipping non-utf-8 ({}) file: {}\n", e, paths)?;
+            }
+        }
+    }
 
     Ok(true)
 }
@@ -94,6 +125,13 @@ fn main() {
 
     match App::new("contentin")
         .setting(clap::AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(SubCommand::with_name("cat")
+        )
+        .subcommand(SubCommand::with_name("grep")
+            .arg(Arg::with_name("pattern")
+                .required(true)
+                .help("pattern to search for"))
+        )
         .subcommand(SubCommand::with_name("run")
                         .setting(clap::AppSettings::TrailingVarArg)
                         .setting(clap::AppSettings::DontDelimitTrailingValues)
@@ -114,13 +152,24 @@ fn main() {
                             .help("Command to run, and its arguments")
                             .multiple(true))
         )
-        .subcommand(SubCommand::with_name("cat")
-        )
         .get_matches().subcommand() {
         ("cat", Some(_)) => {
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
             while cat(&mut from, &mut stdout).expect("TODO: handle error") {
+            }
+        }
+        ("grep", Some(matches)) => {
+            let pattern = matches.value_of("pattern").unwrap();
+            match regex::Regex::new(pattern) {
+                Ok(regex) => {
+                    while grep(&mut from, &regex).expect("TODO: handle error") {
+                    }
+                }
+                Err(e) => {
+                    println!("invalid regex: {} {}", pattern, e);
+                    // TODO: return 2;
+                }
             }
         }
         ("run", Some(matches)) => {
