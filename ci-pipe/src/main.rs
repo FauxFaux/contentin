@@ -22,10 +22,17 @@ fn with_entries<
 ) -> io::Result<()> {
 
     loop {
-        match entry_capnp::read_entry(&mut from).expect("TODO: error type mapping") {
-            None => return Ok(()),
-            Some(entry) => if let Err(e) = work(&mut from, entry) {
+        match entry_capnp::read_entry(&mut from) {
+            Ok(None) => return Ok(()),
+            Ok(Some(entry)) => if let Err(e) = work(&mut from, entry) {
                 return Err(e);
+            },
+            Err(e) => match e.kind {
+                capnp::ErrorKind::Failed => {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData,
+                                              format!("capnp failure: {}", e)));
+                }
+                _ => panic!("unexpected capnp error return: {}", e)
             }
         }
     }
