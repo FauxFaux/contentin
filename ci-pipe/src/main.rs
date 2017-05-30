@@ -15,22 +15,25 @@ use std::io::Write;
 
 fn with_entries<
     R: io::Read,
-    F: FnMut(&mut R, entry_capnp::FileEntry) -> io::Result<()>
+    F: FnMut(&mut R, &entry_capnp::FileEntry) -> io::Result<()>
 >(
     mut from: &mut R,
     mut work: F
-) -> io::Result<()> {
+) -> bool {
 
     loop {
         match entry_capnp::read_entry(&mut from) {
-            Ok(None) => return Ok(()),
-            Ok(Some(entry)) => if let Err(e) = work(&mut from, entry) {
-                return Err(e);
+            Ok(None) => return true,
+            Ok(Some(entry)) => if let Err(e) = work(&mut from, &entry) {
+                let _ = write!(io::stderr(), "fatal: command error while processing '{}': {}\n",
+                        join_backwards(&entry.paths, "/ /"),
+                        e);
+                return false;
             },
             Err(e) => match e.kind {
                 capnp::ErrorKind::Failed => {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData,
-                                              format!("capnp failure: {}", e)));
+                    let _ = write!(io::stderr(), "fatal: capnp failure parsing stream: {}\n", e);
+                    return false;
                 }
                 _ => panic!("unexpected capnp error return: {}", e)
             }
@@ -38,14 +41,14 @@ fn with_entries<
     }
 }
 
-fn cat<R: io::Read, W: io::Write>(mut from: &mut R, to: &mut W) -> io::Result<()> {
-    with_entries(&mut from, move |from, entry| {
+fn cat<R: io::Read, W: io::Write>(mut from: &mut R, to: &mut W) -> bool {
+    with_entries(&mut from, move |from, ref entry| {
         assert_eq!(entry.len, copy_upto(from, to, entry.len)?);
         Ok(())
     })
 }
 
-fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> io::Result<()> {
+fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> bool {
     with_entries(&mut from, move |mut from, entry| {
         let paths = join_backwards(&entry.paths, "/ /");
 
@@ -66,7 +69,7 @@ fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> io::Result<()> {
     })
 }
 
-fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> io::Result<()> {
+fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> bool {
     with_entries(&mut from, move |mut from, entry| {
         // skip others; assuming they're empty
         if !entry.normal_file {
@@ -127,7 +130,7 @@ fn join_backwards(what: &Vec<String>, join: &str) -> String {
 }
 
 
-fn main() {
+fn real_main() -> u8 {
     let from = io::stdin();
     let mut from = from.lock();
 
@@ -164,17 +167,21 @@ fn main() {
         ("cat", Some(_)) => {
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
-            cat(&mut from, &mut stdout).expect("TODO: handle error");
+            if !cat(&mut from, &mut stdout) {
+                return 2;
+            }
         }
         ("grep", Some(matches)) => {
             let pattern = matches.value_of("pattern").unwrap();
             match regex::Regex::new(pattern) {
                 Ok(regex) => {
-                    grep(&mut from, &regex).expect("TODO: handle error")
+                    if !grep(&mut from, &regex) {
+                        return 2;
+                    }
                 }
                 Err(e) => {
                     println!("invalid regex: {} {}", pattern, e);
-                    // TODO: return 2;
+                    return 2;
                 }
             }
         }
@@ -188,8 +195,16 @@ fn main() {
                 raw_command
             };
 
-            direct_run(&mut from, &cmd).expect("TODO: handle error")
+            if !direct_run(&mut from, &cmd) {
+                return 2;
+            }
         },
         _ => unreachable!(),
     }
+
+    return 0;
+}
+
+fn main() {
+    std::process::exit(real_main() as i32);
 }
