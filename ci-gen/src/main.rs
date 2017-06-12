@@ -20,7 +20,6 @@ use std::time;
 use clap::{Arg, App};
 
 use libflate::gzip;
-use tempfile::tempfile;
 
 mod entry_capnp;
 
@@ -406,13 +405,7 @@ impl<'a> Unpacker<'a> {
                 Ok(())
             },
             FileType::Zip => {
-                if let Some(seekable) = fd.as_seekable() {
-                    return self.process_zip(seekable);
-                }
-
-                let mut temp = tempfile()?;
-                io::copy(&mut fd, &mut temp)?;
-                self.process_zip(temp)
+                self.process_zip(fd.as_seekable()?)
             },
             FileType::Other => {
                 Err(io::Error::new(io::ErrorKind::Other, Rewind {}))

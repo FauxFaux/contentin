@@ -12,7 +12,7 @@ use std::io::Write;
 pub trait Tee: io::BufRead {
     fn reset(&mut self) -> io::Result<()>;
     fn len_and_reset(&mut self) -> io::Result<u64>;
-    fn as_seekable(&mut self) -> Option<&mut Seeker>;
+    fn as_seekable(&mut self) -> io::Result<&mut Seeker>;
 }
 
 pub struct TempFileTee {
@@ -76,8 +76,8 @@ impl Tee for TempFileTee {
         Ok(len)
     }
 
-    fn as_seekable(&mut self) -> Option<&mut Seeker> {
-        Some(&mut self.inner)
+    fn as_seekable(&mut self) -> io::Result<&mut Seeker> {
+        Ok(&mut self.inner)
     }
 }
 
@@ -124,8 +124,8 @@ impl<R: io::Read> Tee for BufReaderTee<R>
         Ok(len)
     }
 
-    fn as_seekable(&mut self) -> Option<&mut Seeker> {
-        Some(&mut *self.inner)
+    fn as_seekable(&mut self) -> io::Result<&mut Seeker> {
+        Ok(&mut *self.inner)
     }
 }
 
@@ -147,12 +147,14 @@ impl<R: io::Read> io::BufRead for BufReaderTee<R> {
 
 pub struct FailingTee<T> {
     inner: Box<T>,
+    temp: Option<io::BufReader<fs::File>>,
 }
 
 impl<U: io::Read> FailingTee<io::BufReader<U>> {
     pub fn new(from: U) -> Self {
         FailingTee {
-            inner: Box::new(io::BufReader::new(from))
+            inner: Box::new(io::BufReader::new(from)),
+            temp: None,
         }
     }
 }
@@ -160,6 +162,7 @@ impl<U: io::Read> FailingTee<io::BufReader<U>> {
 impl<T> Tee for FailingTee<T>
     where T: io::BufRead
 {
+    // TODO: I don't think these are unreachable; e.g. a bad gzip stream inside a gzip stream.
     fn reset(&mut self) -> io::Result<()> {
         unreachable!();
     }
@@ -168,8 +171,16 @@ impl<T> Tee for FailingTee<T>
         unreachable!();
     }
 
-    fn as_seekable(&mut self) -> Option<&mut Seeker> {
-        None
+    fn as_seekable(&mut self) -> io::Result<&mut Seeker> {
+        let mut temp = tempfile()?;
+        {
+            let mut fd = io::BufWriter::new(&mut temp);
+            io::copy(self, &mut fd)?;
+        }
+
+        let reader = io::BufReader::new(temp);
+        self.temp = Some(reader);
+        Ok(self.temp.as_mut().unwrap())
     }
 }
 
