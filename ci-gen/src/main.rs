@@ -2,6 +2,7 @@ extern crate ar;
 extern crate bzip2;
 extern crate capnp;
 extern crate clap;
+#[macro_use] extern crate error_chain;
 extern crate ext4;
 extern crate libflate;
 extern crate tar;
@@ -11,7 +12,6 @@ extern crate users;
 extern crate xz2;
 extern crate zip;
 
-use std::error;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -36,6 +36,7 @@ use tee::*;
 mod stat;
 use stat::Stat;
 
+use errors::*;
 
 // magic:
 use std::io::BufRead;
@@ -78,7 +79,7 @@ pub struct Unpacker<'a> {
 }
 
 impl<'a> Unpacker<'a> {
-    fn log<T: fmt::Display, F>(&self, level: u8, msg: F) -> io::Result<()>
+    fn log<T: fmt::Display, F>(&self, level: u8, msg: F) -> Result<()>
     where F: FnOnce() -> T
     {
         if self.options.verbose < level {
@@ -92,15 +93,16 @@ impl<'a> Unpacker<'a> {
             _ => unreachable!()
         };
 
-        writeln!(io::stderr(), "{}: {}", name, msg()).map(|_|())
+        writeln!(io::stderr(), "{}: {}", name, msg()).map(|_|())?;
+        Ok(())
     }
 
-    fn complete(&self, mut file: Box<Tee>) -> io::Result<()> {
+    fn complete(&self, mut file: Box<Tee>) -> Result<()> {
         let size = file.len_and_reset()?;
         self.complete_details(file, size)
     }
 
-    fn complete_details<R: io::Read>(&self, mut src: R, size: u64) -> io::Result<()> {
+    fn complete_details<R: io::Read>(&self, mut src: R, size: u64) -> Result<()> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
 
@@ -135,12 +137,13 @@ impl<'a> Unpacker<'a> {
                             format!("expecting to write {} but wrote {}", size, written)))
                     } else {
                         Ok(())
-                    })
+                    })?;
+                Ok(())
             },
         }
     }
 
-    fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> io::Result<Unpacker<'b>> {
+    fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> Result<Unpacker<'b>> {
         let meta = fd.metadata()?;
         let stat = Stat::from(&meta);
         Ok(Unpacker {
@@ -207,12 +210,12 @@ fn simple_time_tm(val: crates_time::Tm) -> u64 {
     simple_time(time::Duration::new(timespec.sec as u64, timespec.nsec as u32))
 }
 
-fn simple_time_btime(val: &fs::Metadata) -> io::Result<u64> {
+fn simple_time_btime(val: &fs::Metadata) -> Result<u64> {
     match val.created() {
         Ok(time) => Ok(simple_time_sys(time)),
         // "Other" is how "unsupported" is represented here; ew.
         Err(ref e) if e.kind() == io::ErrorKind::Other => Ok(0),
-        Err(other) => Err(other),
+        Err(other) => Err(other).chain_err(|| "loading btime"),
     }
 }
 
@@ -243,63 +246,58 @@ fn simple_time_ctime(val: &stat::Stat) -> u64 {
     }
 }
 
-
-
-#[derive(Clone, Copy, Debug)]
-struct Rewind {
-}
-
-impl error::Error for Rewind {
-    fn description(&self) -> &str {
-        "rewind"
-    }
-}
-
-impl fmt::Display for Rewind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "rewind")
-    }
-}
-
 enum FormatErrorType {
     Rewind,
     Other,
 }
 
-fn is_format_error(e: &io::Error) -> Option<FormatErrorType> {
-    // if there's an actual error code (regardless of what it is),
-    // it's probably not from a library
-    if e.raw_os_error().is_some() {
-        return None;
-    }
-
-    match e.kind() {
-        io::ErrorKind::Other => {
-            if let Some(ref obj) = e.get_ref() {
-
-                // our marker error for backtracking
-                if obj.is::<Rewind>() {
-                    return Some(FormatErrorType::Rewind);
-                }
-
-
-                if obj.is::<xz2::stream::Error>() {
-                    return Some(FormatErrorType::Other);
-                }
+fn is_format_error(e: &Error) -> Option<FormatErrorType> {
+    match *e.kind() {
+        ErrorKind::Rewind => {
+            return Some(FormatErrorType::Rewind);
+        }
+        ErrorKind::Io(ref e) => {
+            // if there's an actual error code (regardless of what it is),
+            // it's probably not from a library
+            if e.raw_os_error().is_some() {
+                return None;
             }
-        },
-        io::ErrorKind::BrokenPipe
-        | io::ErrorKind::NotFound
-        | io::ErrorKind::PermissionDenied
-        => return None,
-        _ => {},
+
+            match e.kind() {
+                io::ErrorKind::Other => {
+                    if let Some(ref obj) = e.get_ref() {
+
+                        if obj.is::<xz2::stream::Error>() {
+                            return Some(FormatErrorType::Other);
+                        }
+                    }
+                },
+                io::ErrorKind::BrokenPipe
+                | io::ErrorKind::NotFound
+                | io::ErrorKind::PermissionDenied
+                => return None,
+                _ => {},
+            }
+        }
+
+        ErrorKind::Ext4(_) => {
+            return Some(FormatErrorType::Other);
+        }
+
+        ErrorKind::Zip(_) => {
+            return Some(FormatErrorType::Other);
+        }
+
+        ErrorKind::Msg(_) => {
+            return None;
+        }
     }
 
     None
 }
 
 impl<'a> Unpacker<'a> {
-    fn process_zip<T>(&self, from: T) -> io::Result<()>
+    fn process_zip<T>(&self, from: T) -> Result<()>
         where T: io::Read + io::Seek {
         let mut zip = zip::ZipArchive::new(from)?;
 
@@ -328,7 +326,7 @@ impl<'a> Unpacker<'a> {
         Ok(())
     }
 
-    fn with_gzip(&self, header: &gzip::Header) -> io::Result<Unpacker> {
+    fn with_gzip(&self, header: &gzip::Header) -> Result<Unpacker> {
         let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
         let name = match header.filename() {
             Some(ref c_str) => c_str.to_str().map_err(
@@ -343,9 +341,9 @@ impl<'a> Unpacker<'a> {
         Ok(unpacker)
     }
 
-    fn unpack_or_die<'b>(&self, mut fd: &mut Box<Tee + 'b>) -> io::Result<()> {
+    fn unpack_or_die<'b>(&self, mut fd: &mut Box<Tee + 'b>) -> Result<()> {
         if self.current.depth >= self.options.max_depth {
-            return Err(io::Error::new(io::ErrorKind::Other, Rewind {}));
+            bail!(ErrorKind::Rewind);
         }
 
         let identity = FileType::identify(fd.fill_buf()?);
@@ -424,7 +422,7 @@ impl<'a> Unpacker<'a> {
                 self.process_zip(fd.as_seekable()?)
             },
             FileType::Other => {
-                Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
+                Err(ErrorKind::Rewind.into())
             },
             FileType::MBR => {
                 let mut fd = fd.as_seekable()?;
@@ -436,7 +434,7 @@ impl<'a> Unpacker<'a> {
                     settings.checksums = ext4::Checksums::Enabled;
                     match ext4::SuperBlock::new_with_options(inner, &settings) {
                         Ok(mut fs) => {
-                            let root = &fs.root().map_err(|e| io::Error::new(io::ErrorKind::Other, format!("root: {}", e)))?;
+                            let root = &fs.root().chain_err(|| "loading root")?;
                             fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
                                 use ext4::Enhanced::*;
                                 match *enhanced {
@@ -458,15 +456,15 @@ impl<'a> Unpacker<'a> {
                                         }
 
                                         // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
-                                        unpacker.unpack(TempFileTee::if_necessary(fs.open(inode)?, &unpacker)?)?;
+                                        unpacker.unpack(TempFileTee::if_necessary(fs.open(inode)?, &unpacker).expect("TODO 1")).expect("TODO 2");
                                     }
                                     _ => {
                                         failed = true;
-                                        self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced))?;
+                                        self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced)).expect("TODO 3");
                                     }
                                 }
                                 Ok(true)
-                            }).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("walk: {:?}", e)))?;
+                            }).chain_err(|| "walking")?;
                         }
                         Err(failure) => match failure.kind() {
                             _ => {
@@ -476,7 +474,7 @@ impl<'a> Unpacker<'a> {
                     }
                 }
                 if failed {
-                    Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
+                    Err(ErrorKind::Rewind.into())
                 } else {
                     Ok(())
                 }
@@ -485,7 +483,7 @@ impl<'a> Unpacker<'a> {
     }
 
     // TODO: Work out how to generic these copy-pastes
-    fn unpack_stream_xz<'c>(&self, fd: &mut Box<Tee + 'c>) -> io::Result<()> {
+    fn unpack_stream_xz<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
         let attempt = {
             let br = BoxReader { inner: fd };
             let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(br)));
@@ -502,7 +500,7 @@ impl<'a> Unpacker<'a> {
     }
 
     // TODO: copy-paste of unpack_stream_xz
-    fn unpack_stream_bz2<'c>(&self, fd: &mut Box<Tee + 'c>) -> io::Result<()> {
+    fn unpack_stream_bz2<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
         let attempt = {
             let br = BoxReader { inner: fd };
             let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(br)));
@@ -518,12 +516,11 @@ impl<'a> Unpacker<'a> {
         }
     }
 
-    fn is_format_error_result<T>(&self, res: &io::Result<T>) -> io::Result<bool> {
+    fn is_format_error_result<T>(&self, res: &Result<T>) -> Result<bool> {
         if res.is_ok() {
             return Ok(false);
         }
 
-        // TODO: Ew:
         let error = res.as_ref().err().unwrap();
 
         if let Some(specific) = is_format_error(&error) {
@@ -541,7 +538,7 @@ impl<'a> Unpacker<'a> {
         return Ok(false);
     }
 
-    fn unpack(&self, mut fd: Box<Tee>) -> io::Result<()> {
+    fn unpack(&self, mut fd: Box<Tee>) -> Result<()> {
         let res = self.unpack_or_die(&mut fd);
 
         if self.is_format_error_result(&res)? {
@@ -553,7 +550,7 @@ impl<'a> Unpacker<'a> {
     }
 }
 
-fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> io::Result<()> {
+fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result<()> {
     let path = path.as_ref();
 
     if !path.is_dir() {
@@ -585,7 +582,7 @@ fn must_fit(x: u64) -> u8 {
     x as u8
 }
 
-fn real_main() -> u8 {
+fn real_main() -> Result<i32> {
 
     let matches = App::new("contentin")
                     .arg(Arg::with_name("v")
@@ -664,18 +661,30 @@ fn real_main() -> u8 {
     };
 
     for path in matches.values_of("INPUT").unwrap() {
-        if let Err(e) = process_real_path(path, &options) {
-            if let Err(_) = writeln!(io::stderr(), "fatal: processing '{}': {:?}", path, e) {
-                return 6;
-            }
+        process_real_path(path, &options).chain_err(|| format!("processing: '{}'", path))?;
+    }
 
-            return 4;
+    return Ok(0);
+}
+
+mod errors {
+    error_chain! {
+        links {
+            Ext4(::ext4::Error, ::ext4::ErrorKind);
+        }
+
+        foreign_links {
+            Io(::std::io::Error);
+            Zip(::zip::result::ZipError);
+        }
+
+        errors {
+            Rewind {
+                description("bailin' out")
+                display("rewind")
+            }
         }
     }
-    return 0;
 }
 
-
-fn main() {
-    std::process::exit(real_main() as i32)
-}
+quick_main!(real_main);
