@@ -178,6 +178,8 @@ impl<T> Tee for FailingTee<T>
             io::copy(self, &mut fd)?;
         }
 
+        temp.seek(io::SeekFrom::Start(0))?;
+
         let reader = io::BufReader::new(temp);
         self.temp = Some(reader);
         Ok(self.temp.as_mut().unwrap())
