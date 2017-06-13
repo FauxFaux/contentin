@@ -2,6 +2,7 @@ extern crate ar;
 extern crate bzip2;
 extern crate capnp;
 extern crate clap;
+extern crate ext4;
 extern crate libflate;
 extern crate tar;
 extern crate tempfile;
@@ -215,6 +216,21 @@ fn simple_time_btime(val: &fs::Metadata) -> io::Result<u64> {
     }
 }
 
+fn simple_time_ext4(val: &ext4::Time) -> u64 {
+    let nanos = val.nanos.unwrap_or(0);
+    if nanos > 1_000_000_000 {
+        // TODO: there are some extra bits here for us, which I'm too lazy to implement
+        return 0;
+    }
+
+    if val.epoch_secs > 0x7fff_ffff {
+        // Negative time, which we're actually not supporting?
+        return 0;
+    }
+
+    (val.epoch_secs as u64) * 1_000_000_000 + nanos as u64
+}
+
 fn simple_time_epoch_seconds(seconds: u64) -> u64 {
     seconds.checked_mul(1_000_000_000).unwrap_or(0)
 }
@@ -410,6 +426,61 @@ impl<'a> Unpacker<'a> {
             FileType::Other => {
                 Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
             },
+            FileType::MBR => {
+                let mut fd = fd.as_seekable()?;
+                let mut failed = false;
+                for partition in ext4::mbr::read_partition_table(&mut fd)? {
+                    let inner = ext4::mbr::read_partition(&mut fd, &partition)?;
+
+                    let mut settings = ext4::Options::default();
+                    settings.checksums = ext4::Checksums::Enabled;
+                    match ext4::SuperBlock::new_with_options(inner, &settings) {
+                        Ok(mut fs) => {
+                            let root = &fs.root().map_err(|e| io::Error::new(io::ErrorKind::Other, format!("root: {}", e)))?;
+                            fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
+                                use ext4::Enhanced::*;
+                                match *enhanced {
+                                    Directory(_) => {},
+                                    RegularFile => {
+                                        let mut unpacker = self.with_path(path);
+                                        {
+                                            let current = &mut unpacker.current;
+                                            let stat: &ext4::Stat = &inode.stat;
+                                            current.uid = stat.uid;
+                                            current.gid = stat.gid;
+                                            current.atime = simple_time_ext4(&stat.atime);
+                                            current.mtime = simple_time_ext4(&stat.mtime);
+                                            current.ctime = simple_time_ext4(&stat.ctime);
+                                            current.btime = match stat.btime.as_ref() {
+                                                Some(btime) => simple_time_ext4(btime),
+                                                None => 0,
+                                            };
+                                        }
+
+                                        // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
+                                        unpacker.unpack(TempFileTee::if_necessary(fs.open(inode)?, &unpacker)?)?;
+                                    }
+                                    _ => {
+                                        failed = true;
+                                        self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced))?;
+                                    }
+                                }
+                                Ok(true)
+                            }).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("walk: {:?}", e)))?;
+                        }
+                        Err(failure) => match failure.kind() {
+                            _ => {
+                                failed = true;
+                            }
+                        }
+                    }
+                }
+                if failed {
+                    Err(io::Error::new(io::ErrorKind::Other, Rewind {}))
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 

@@ -1,6 +1,8 @@
 use std;
 use std::fmt;
 
+use ext4::mbr;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileType {
     GZip,
@@ -9,6 +11,7 @@ pub enum FileType {
     BZip2,
     Xz,
     Deb,
+    MBR,
     Other,
 }
 
@@ -59,6 +62,25 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
+fn is_probably_mbr(header: &[u8]) -> bool {
+    if header.len() < 512 + 4 {
+        return false;
+    }
+
+    if 0x55 != header[510] || 0xAA != header[511] {
+        return false;
+    }
+
+    if b"EFI"[..] == header[512..515] {
+        return false;
+    }
+
+    match mbr::parse_partition_table(header, 512) {
+        Err(_) => false,
+        Ok(table) => !table.is_empty(),
+    }
+}
+
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
 
 impl FileType {
@@ -96,6 +118,8 @@ impl FileType {
             FileType::Xz
         } else if is_probably_tar(header) {
             FileType::Tar
+        } else if is_probably_mbr(header) {
+            FileType::MBR
         } else {
             FileType::Other
         }
