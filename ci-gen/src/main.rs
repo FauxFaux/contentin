@@ -360,11 +360,16 @@ impl<'a> Unpacker<'a> {
                     }
 
                     // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
-                    unpacker.unpack(TempFileTee::if_necessary(fs.open(inode)?, &unpacker).expect("TODO 1")).expect("TODO 2");
+                    let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
+                        .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
+
+                    unpacker.unpack(tee)
+                        .map_err(|e| ext4::Error::with_chain(e, "unpacking"))?
                 }
                 _ => {
                     failed = true;
-                    self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced)).expect("TODO 3");
+                    self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced))
+                        .map_err(|e| ext4::Error::with_chain(e, "logging"))?;
                 }
             }
             Ok(true)
