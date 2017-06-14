@@ -26,5 +26,9 @@ time = "0.1.37"
 [build-dependencies]
 capnpc = "0.8.5"
 
+[dev-dependencies]
+crc = "1.0.0"
+ci_capnp = { path = "../ci_capnp" }
+
 [dependencies.ext4]
 path = "../../ext4-rs"

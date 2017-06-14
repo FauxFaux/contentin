@@ -1,15 +1,11 @@
 [package]
-name = "ci-pipe"
+name = "ci_capnp"
 version = "0.1.0"
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
 build = "../ci-shared/build.rs"
 
 [dependencies]
 capnp = "0.8.10"
-ci_capnp = { path = "../ci_capnp" }
-clap = "2.23.3"
-regex = "0.2.2"
-tempfile = "2.1.5"
 
 [build-dependencies]
 capnpc = "0.8.5"

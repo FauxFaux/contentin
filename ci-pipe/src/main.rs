@@ -1,4 +1,5 @@
 extern crate capnp;
+extern crate ci_capnp;
 extern crate clap;
 extern crate regex;
 
@@ -7,22 +8,20 @@ use std::process;
 
 use clap::{Arg, App, SubCommand};
 
-mod entry_capnp;
-
 use std::io::BufRead;
 use std::io::Read;
 use std::io::Write;
 
 fn with_entries<
     R: io::Read,
-    F: FnMut(&mut R, &entry_capnp::FileEntry) -> io::Result<()>
+    F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Result<()>
 >(
     mut from: &mut R,
     mut work: F
 ) -> bool {
 
     loop {
-        match entry_capnp::read_entry(&mut from) {
+        match ci_capnp::read_entry(&mut from) {
             Ok(None) => return true,
             Ok(Some(entry)) => if let Err(e) = work(&mut from, &entry) {
                 let _ = write!(io::stderr(), "fatal: command error while processing '{}': {}\n",
