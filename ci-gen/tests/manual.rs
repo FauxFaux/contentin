@@ -90,12 +90,11 @@ struct SimpleTest {
 }
 
 const SIMPLE_EXPECTATIONS: &[SimpleTest] = &[
-    SimpleTest { paths: &["./"], normal_file: false, crc: 0, len: 0 },
-    SimpleTest { paths: &["./a/"], normal_file: false, crc: 0, len: 0 },
-    SimpleTest { paths: &["./a/b/"], normal_file: false, crc: 0, len: 0 },
-    SimpleTest { paths: &["./a/b/c/"], normal_file: false, crc: 0, len: 0 },
-    SimpleTest { paths: &["./a/bar"], normal_file: true, crc: 0xe3069283, len: 9 },
-    SimpleTest { paths: &["./foo"], normal_file: true, crc: 0xe3069283, len: 9 },
+    SimpleTest { paths: &["a/"], normal_file: false, crc: 0, len: 0 },
+    SimpleTest { paths: &["a/b/"], normal_file: false, crc: 0, len: 0 },
+    SimpleTest { paths: &["a/b/c/"], normal_file: false, crc: 0, len: 0 },
+    SimpleTest { paths: &["a/bar"], normal_file: true, crc: 0xe3069283, len: 9 },
+    SimpleTest { paths: &["foo"], normal_file: true, crc: 0xe3069283, len: 9 },
 ];
 
 fn dump(actual: &[TestEntry]) {

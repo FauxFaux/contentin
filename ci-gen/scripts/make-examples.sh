@@ -10,11 +10,11 @@ T=$(mktemp -d)
     printf 123456789 > foo
     printf 123456789 > a/bar
 
-    zip -r "${O}/simple.zip" .
-    tar cf "${O}/simple.tar" .
-    tar zcf "${O}/simple.tar.gz" .
-    tar jcf "${O}/simple.tar.bz2" .
-    tar Jcf "${O}/simple.tar.xz" .
+    zip -r "${O}/simple.zip" *
+    tar cf "${O}/simple.tar" *
+    tar zcf "${O}/simple.tar.gz" *
+    tar jcf "${O}/simple.tar.bz2" *
+    tar Jcf "${O}/simple.tar.xz" *
 )
 
 strip-nondeterminism "${O}"/*
