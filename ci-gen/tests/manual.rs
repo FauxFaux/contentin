@@ -131,6 +131,13 @@ fn check_byte_flip(path: &str, extra_path_component: Option<&str>) {
     assert_eq!(2, res.len());
 }
 
+fn round_trips(test_path: &str) {
+    let entries = entries(test_path).unwrap();
+    assert_eq!(1, entries.len());
+    assert_eq!(1, entries[0].entry.paths.len());
+    assert_eq!(test_path, entries[0].entry.paths[0]);
+}
+
 #[test]
 fn simple_tar() {
     check_simple("tests/simple.tar", None)
@@ -165,7 +172,7 @@ fn byte_flip_tar() {
 }
 #[test]
 fn byte_flip_tar_bz2() {
-    check_byte_flip("tests/byte_flip.tar.bz2", Some("tests/byte_flip.tar"))
+    round_trips("tests/byte_flip.tar.bz2")
 }
 #[test]
 fn byte_flip_tar_gz() {
@@ -173,11 +180,7 @@ fn byte_flip_tar_gz() {
 }
 #[test]
 fn byte_flip_tar_xz() {
-    let test_path = "tests/byte_flip.tar.xz";
-    let entries = entries(test_path).unwrap();
-    assert_eq!(1, entries.len());
-    assert_eq!(1, entries[0].entry.paths.len());
-    assert_eq!(test_path, entries[0].entry.paths[0]);
+    round_trips("tests/byte_flip.tar.xz");
 }
 #[test]
 fn byte_flip_zip() {

@@ -265,9 +265,15 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
             }
 
             match e.kind() {
+                io::ErrorKind::InvalidInput => {
+                    if let Some(ref obj) = e.get_ref() {
+                        if obj.is::<bzip2::Error>() {
+                            return Some(FormatErrorType::Other);
+                        }
+                    }
+                },
                 io::ErrorKind::Other => {
                     if let Some(ref obj) = e.get_ref() {
-
                         if obj.is::<xz2::stream::Error>() {
                             return Some(FormatErrorType::Other);
                         }
