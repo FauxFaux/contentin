@@ -127,7 +127,7 @@ fn check_simple(path: &str, extra_path_component: Option<&str>) {
 
 fn check_byte_flip(path: &str, extra_path_component: Option<&str>) {
     let res = entries(path).unwrap();
-    println!("{:?}", res);
+    dump(&res);
     assert_eq!(2, res.len());
 }
 
@@ -152,9 +152,16 @@ fn simple_zip() {
     check_simple("tests/simple.zip", None)
 }
 
+/// tar has no error checking, and file data gets corrupted, so we don't detect this.
 #[test]
 fn byte_flip_tar() {
-    check_byte_flip("tests/byte_flip.tar", None)
+    let entries = entries("tests/byte_flip.tar").unwrap();
+    assert_eq!(2, entries.len());
+    // this crc should be correct
+    assert_eq!(2806881067, entries[0].crc);
+
+    // this crc should be wrong...
+    assert_eq!(3502720051, entries[1].crc);
 }
 #[test]
 fn byte_flip_tar_bz2() {
@@ -166,7 +173,11 @@ fn byte_flip_tar_gz() {
 }
 #[test]
 fn byte_flip_tar_xz() {
-    check_byte_flip("tests/byte_flip.tar.xz", Some("tests/byte_flip.tar"))
+    let test_path = "tests/byte_flip.tar.xz";
+    let entries = entries(test_path).unwrap();
+    assert_eq!(1, entries.len());
+    assert_eq!(1, entries[0].entry.paths.len());
+    assert_eq!(test_path, entries[0].entry.paths[0]);
 }
 #[test]
 fn byte_flip_zip() {
