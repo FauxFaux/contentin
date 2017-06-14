@@ -332,6 +332,54 @@ impl<'a> Unpacker<'a> {
         Ok(())
     }
 
+    fn process_partition<T>(&self, inner: T) -> Result<bool>
+    where T: io::Read + io::Seek {
+        let mut failed = false;
+        let mut settings = ext4::Options::default();
+        settings.checksums = ext4::Checksums::Enabled;
+        match ext4::SuperBlock::new_with_options(inner, &settings) {
+            Ok(mut fs) => {
+                let root = &fs.root().chain_err(|| "loading root")?;
+                fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
+                    use ext4::Enhanced::*;
+                    match *enhanced {
+                        Directory(_) => {},
+                        RegularFile => {
+                            let mut unpacker = self.with_path(path);
+                            {
+                                let current = &mut unpacker.current;
+                                let stat: &ext4::Stat = &inode.stat;
+                                current.uid = stat.uid;
+                                current.gid = stat.gid;
+                                current.atime = simple_time_ext4(&stat.atime);
+                                current.mtime = simple_time_ext4(&stat.mtime);
+                                current.ctime = simple_time_ext4(&stat.ctime);
+                                current.btime = match stat.btime.as_ref() {
+                                    Some(btime) => simple_time_ext4(btime),
+                                    None => 0,
+                                };
+                            }
+
+                            // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
+                            unpacker.unpack(TempFileTee::if_necessary(fs.open(inode)?, &unpacker).expect("TODO 1")).expect("TODO 2");
+                        }
+                        _ => {
+                            failed = true;
+                            self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced)).expect("TODO 3");
+                        }
+                    }
+                    Ok(true)
+                }).chain_err(|| "walking")?;
+            }
+            Err(failure) => match failure.kind() {
+                _ => {
+                    failed = true;
+                }
+            }
+        }
+        Ok(failed)
+    }
+
     fn with_gzip(&self, header: &gzip::Header) -> Result<Unpacker> {
         let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
         let name = match header.filename() {
@@ -435,49 +483,7 @@ impl<'a> Unpacker<'a> {
                 let mut failed = false;
                 for partition in ext4::mbr::read_partition_table(&mut fd)? {
                     let inner = ext4::mbr::read_partition(&mut fd, &partition)?;
-
-                    let mut settings = ext4::Options::default();
-                    settings.checksums = ext4::Checksums::Enabled;
-                    match ext4::SuperBlock::new_with_options(inner, &settings) {
-                        Ok(mut fs) => {
-                            let root = &fs.root().chain_err(|| "loading root")?;
-                            fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
-                                use ext4::Enhanced::*;
-                                match *enhanced {
-                                    Directory(_) => {},
-                                    RegularFile => {
-                                        let mut unpacker = self.with_path(path);
-                                        {
-                                            let current = &mut unpacker.current;
-                                            let stat: &ext4::Stat = &inode.stat;
-                                            current.uid = stat.uid;
-                                            current.gid = stat.gid;
-                                            current.atime = simple_time_ext4(&stat.atime);
-                                            current.mtime = simple_time_ext4(&stat.mtime);
-                                            current.ctime = simple_time_ext4(&stat.ctime);
-                                            current.btime = match stat.btime.as_ref() {
-                                                Some(btime) => simple_time_ext4(btime),
-                                                None => 0,
-                                            };
-                                        }
-
-                                        // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
-                                        unpacker.unpack(TempFileTee::if_necessary(fs.open(inode)?, &unpacker).expect("TODO 1")).expect("TODO 2");
-                                    }
-                                    _ => {
-                                        failed = true;
-                                        self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced)).expect("TODO 3");
-                                    }
-                                }
-                                Ok(true)
-                            }).chain_err(|| "walking")?;
-                        }
-                        Err(failure) => match failure.kind() {
-                            _ => {
-                                failed = true;
-                            }
-                        }
-                    }
+                    failed |= self.process_partition(inner)?;
                 }
                 if failed {
                     Err(ErrorKind::Rewind.into())
