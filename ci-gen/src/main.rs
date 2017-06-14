@@ -384,6 +384,37 @@ impl<'a> Unpacker<'a> {
         Ok(false)
     }
 
+
+    fn process_tar<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
+        let mut decoder = tar::Archive::new(fd);
+        for entry in decoder.entries()? {
+            let entry = entry?;
+            let mut unpacker = self.with_path(entry.path()?.to_str()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
+                                              format!("tar path contains invalid utf-8: {:?}",
+                                                      entry.path_bytes())))?);
+            {
+                let current = &mut unpacker.current;
+                let header = entry.header();
+                current.uid = header.uid()?;
+                current.gid = header.gid()?;
+                current.mtime = simple_time_epoch_seconds(header.mtime()?);
+                if let Some(found) = header.username()
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
+                                                format!("invalid username in tar: {} {:?}", e, header.username_bytes())))? {
+                    current.user_name = found.to_string();
+                }
+                if let Some(found) = header.groupname()
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
+                                                format!("invalid groupname in tar: {} {:?}", e, header.groupname_bytes())))? {
+                    current.group_name = found.to_string();
+                }
+            }
+            unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)?;
+        }
+        Ok(())
+    }
+
     fn with_gzip(&self, header: &gzip::Header) -> Result<Unpacker> {
         let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
         let name = match header.filename() {
@@ -432,10 +463,12 @@ impl<'a> Unpacker<'a> {
             FileType::Xz => {
                 self.with_path(self.strip_compression_suffix(".xz"))
                     .unpack_stream_xz(fd)
+                    .chain_err(|| "unpacking xz")
             },
             FileType::BZip2 => {
                 self.with_path(self.strip_compression_suffix(".bz2"))
                     .unpack_stream_bz2(fd)
+                    .chain_err(|| "unpacking bz2")
             }
 
             FileType::Deb => {
@@ -443,41 +476,18 @@ impl<'a> Unpacker<'a> {
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
                     let unpacker = self.with_path(entry.header().identifier());
-                    unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)?;
+                    unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)
+                        .chain_err(|| format!("unpacking deb entry {}", unpacker.current.path))?;
                 }
                 Ok(())
             },
             FileType::Tar => {
-                let mut decoder = tar::Archive::new(fd);
-                for entry in decoder.entries()? {
-                    let entry = entry?;
-                    let mut unpacker = self.with_path(entry.path()?.to_str()
-                        .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
-                                                      format!("tar path contains invalid utf-8: {:?}",
-                                                              entry.path_bytes())))?);
-                    {
-                        let current = &mut unpacker.current;
-                        let header = entry.header();
-                        current.uid = header.uid()?;
-                        current.gid = header.gid()?;
-                        current.mtime = simple_time_epoch_seconds(header.mtime()?);
-                        if let Some(found) = header.username()
-                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
-                                                        format!("invalid username in tar: {} {:?}", e, header.username_bytes())))? {
-                            current.user_name = found.to_string();
-                        }
-                        if let Some(found) = header.groupname()
-                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
-                                                        format!("invalid groupname in tar: {} {:?}", e, header.groupname_bytes())))? {
-                            current.group_name = found.to_string();
-                        }
-                    }
-                    unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)?;
-                }
-                Ok(())
+                self.process_tar(fd)
+                    .chain_err(|| "unpacking tar")
             },
             FileType::Zip => {
                 self.process_zip(fd.as_seekable()?)
+                    .chain_err(|| "reading zip file")
             },
             FileType::Other => {
                 Err(ErrorKind::Rewind.into())
@@ -555,7 +565,8 @@ impl<'a> Unpacker<'a> {
     }
 
     fn unpack(&self, mut fd: Box<Tee>) -> Result<()> {
-        let res = self.unpack_or_die(&mut fd);
+        let res = self.unpack_or_die(&mut fd)
+            .chain_err(|| "unpacking failed");
 
         if self.is_format_error_result(&res)? {
             self.complete(fd)?;
