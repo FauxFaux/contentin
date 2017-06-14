@@ -125,6 +125,12 @@ fn check_simple(path: &str, extra_path_component: Option<&str>) {
     }
 }
 
+fn check_byte_flip(path: &str, extra_path_component: Option<&str>) {
+    let res = entries(path).unwrap();
+    println!("{:?}", res);
+    assert_eq!(2, res.len());
+}
+
 #[test]
 fn simple_tar() {
     check_simple("tests/simple.tar", None)
@@ -144,4 +150,25 @@ fn simple_tar_xz() {
 #[test]
 fn simple_zip() {
     check_simple("tests/simple.zip", None)
+}
+
+#[test]
+fn byte_flip_tar() {
+    check_byte_flip("tests/byte_flip.tar", None)
+}
+#[test]
+fn byte_flip_tar_bz2() {
+    check_byte_flip("tests/byte_flip.tar.bz2", Some("tests/byte_flip.tar"))
+}
+#[test]
+fn byte_flip_tar_gz() {
+    check_byte_flip("tests/byte_flip.tar.gz", Some("tests/byte_flip.tar"))
+}
+#[test]
+fn byte_flip_tar_xz() {
+    check_byte_flip("tests/byte_flip.tar.xz", Some("tests/byte_flip.tar"))
+}
+#[test]
+fn byte_flip_zip() {
+    check_byte_flip("tests/byte_flip.zip", None)
 }
