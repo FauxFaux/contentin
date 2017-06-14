@@ -549,6 +549,27 @@ impl<'a> Unpacker<'a> {
 
         let error = res.as_ref().err().unwrap();
 
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+
+        // TODO: working around https://github.com/rust-lang/rust/issues/35943
+        // TODO: i.e. error.cause() is totally useless
+
+        let broken_ref = error.iter().last().unwrap();
+        let error: Option<&errors::Error> = unsafe {
+            let oh_look_fixed: &'static std::error::Error = std::mem::transmute(broken_ref);
+            oh_look_fixed.downcast_ref::<errors::Error>()
+        };
+
+        if error.is_none() {
+            return Ok(false);
+        }
+
+        let error = error.unwrap();
+
         if let Some(specific) = is_format_error(&error) {
             match specific {
                 FormatErrorType::Other => {
@@ -561,7 +582,14 @@ impl<'a> Unpacker<'a> {
 
             return Ok(true);
         }
-        return Ok(false);
+
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+
+        Ok(false)
     }
 
     fn unpack(&self, mut fd: Box<Tee>) -> Result<()> {
