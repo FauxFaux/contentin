@@ -9,7 +9,7 @@ use std::io::Read;
 use ci_capnp::FileEntry;
 
 
-const PROG: &str = "target/debug/ci-gen";
+const PROG: &str = "../target/debug/ci-gen";
 
 #[derive(Debug)]
 struct TestEntry {

@@ -87,6 +87,7 @@ impl<'a> Unpacker<'a> {
         }
 
         let name = match level {
+            0 => "error",
             1 => "warn",
             2 => "info",
             3 => "debug",
@@ -302,11 +303,17 @@ impl<'a> Unpacker<'a> {
         let mut zip = zip::ZipArchive::new(from)?;
 
         for i in 0..zip.len() {
-            let res = {
+            let unpacker = {
                 let entry = zip.by_index(i)?;
                 let mut unpacker = self.with_path(entry.name());
 
                 unpacker.current.mtime = simple_time_tm(entry.last_modified());
+                // unpacker.current.mode = entry.unix_mode().unwrap_or(0);
+                unpacker
+            };
+
+            let res = {
+                let entry = zip.by_index(i)?;
                 let mut failing: Box<Tee> = Box::new(FailingTee::new(entry));
                 unpacker.unpack_or_die(&mut failing)
             };
@@ -314,11 +321,10 @@ impl<'a> Unpacker<'a> {
             if self.is_format_error_result(&res)? {
                 let new_entry = zip.by_index(i)?;
                 let size = new_entry.size();
-                self.complete_details(new_entry, size)?;
+                unpacker.complete_details(new_entry, size)?;
                 continue;
             }
 
-            // scope based borrow sigh; same block as above
             if res.is_err() {
                 return res;
             }
