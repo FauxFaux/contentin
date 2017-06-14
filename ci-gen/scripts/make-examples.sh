@@ -30,10 +30,10 @@ tar Jcf "${O}/byte_flip.tar.xz" crap crap2
 
 strip-nondeterminism "${O}"/*
 
-dd if=/dev/zero bs=1 count=2 seek=5000 of="${O}/byte_flip.zip"
-dd if=/dev/zero bs=1 count=2 seek=5000 of="${O}/byte_flip.tar"
-dd if=/dev/zero bs=1 count=2 seek=5000 of="${O}/byte_flip.tar.gz"
-dd if=/dev/zero bs=1 count=2 seek=5000 of="${O}/byte_flip.tar.bz2"
-dd if=/dev/zero bs=1 count=2 seek=5000 of="${O}/byte_flip.tar.xz"
+dd if=/dev/zero bs=1 conv=notrunc count=2 seek=5000 of="${O}/byte_flip.zip"
+dd if=/dev/zero bs=1 conv=notrunc count=2 seek=5000 of="${O}/byte_flip.tar"
+dd if=/dev/zero bs=1 conv=notrunc count=2 seek=5000 of="${O}/byte_flip.tar.gz"
+dd if=/dev/zero bs=1 conv=notrunc count=2 seek=5000 of="${O}/byte_flip.tar.bz2"
+dd if=/dev/zero bs=1 conv=notrunc count=2 seek=5000 of="${O}/byte_flip.tar.xz"
 
 rm -rf "$T"
