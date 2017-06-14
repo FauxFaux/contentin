@@ -107,9 +107,10 @@ impl FileType {
             FileType::Deb
         } else if header.len() > 40
             && b'B' == header[0] && b'Z' == header[1]
-            && b'h' == header[2] && 0x31 == header[3]
-            && 0x41 == header[4] && 0x59 == header[5]
-            && 0x26 == header[6] {
+            && b'h' == header[2] // [3]: compression level
+            && 0x31 == header[4] && 0x41 == header[5]
+            && 0x59 == header[6] && 0x26 == header[7]
+            && 0x53 == header[8] && 0x59 == header[9] {
             FileType::BZip2
         } else if header.len() > 6
             && 0xfd == header[0] && b'7' == header[1]
