@@ -125,12 +125,6 @@ fn check_simple(path: &str, extra_path_component: Option<&str>) {
     }
 }
 
-fn check_byte_flip(path: &str, extra_path_component: Option<&str>) {
-    let res = entries(path).unwrap();
-    dump(&res);
-    assert_eq!(2, res.len());
-}
-
 fn round_trips(test_path: &str) {
     let entries = entries(test_path).unwrap();
     assert_eq!(1, entries.len());
@@ -192,11 +186,26 @@ fn byte_flip_tar_gz() {
     // this crc should be wrong...
     assert_eq!(1897953606, entries[2].crc);
 }
+
+/// ZIP fails exactly like gzip, much to my chagrin.
+#[test]
+fn byte_flip_zip() {
+    let test_path = "tests/byte_flip.zip";
+    let entries = entries(test_path).unwrap();
+    assert_eq!(3, entries.len());
+
+    // sorting in test means the archive comes out first (the order is undefined anyway...)
+    assert_eq!(1, entries[0].entry.paths.len());
+    assert_eq!(test_path, entries[0].entry.paths[0]);
+
+    // this crc should be correct
+    assert_eq!(2806881067, entries[1].crc);
+
+    // this crc should be wrong...
+    assert_eq!(3055781517, entries[2].crc);
+}
+
 #[test]
 fn byte_flip_tar_xz() {
     round_trips("tests/byte_flip.tar.xz");
-}
-#[test]
-fn byte_flip_zip() {
-    check_byte_flip("tests/byte_flip.zip", None)
 }

@@ -286,6 +286,12 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
                             return Some(FormatErrorType::Other);
                         }
                     }
+
+                    // ZIP
+                    use std::error::Error;
+                    if "Invalid checksum" == e.description() {
+                        return Some(FormatErrorType::Other);
+                    }
                 }
                 io::ErrorKind::InvalidData => {
                     use std::error::Error;
