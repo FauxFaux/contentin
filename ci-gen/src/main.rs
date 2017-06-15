@@ -2,7 +2,8 @@ extern crate ar;
 extern crate bzip2;
 extern crate capnp;
 extern crate clap;
-#[macro_use] extern crate error_chain;
+#[macro_use]
+extern crate error_chain;
 extern crate ext4;
 extern crate libflate;
 extern crate tar;
@@ -25,15 +26,19 @@ use libflate::gzip;
 mod entry_capnp;
 
 mod filetype;
+
 use filetype::FileType;
 
 mod slist;
+
 use slist::SList;
 
 mod tee;
+
 use tee::*;
 
 mod stat;
+
 use stat::Stat;
 
 use errors::*;
@@ -80,7 +85,7 @@ pub struct Unpacker<'a> {
 
 impl<'a> Unpacker<'a> {
     fn log<T: fmt::Display, F>(&self, level: u8, msg: F) -> Result<()>
-    where F: FnOnce() -> T
+        where F: FnOnce() -> T
     {
         if self.options.verbose < level {
             return Ok(());
@@ -94,7 +99,7 @@ impl<'a> Unpacker<'a> {
             _ => unreachable!()
         };
 
-        writeln!(io::stderr(), "{}: {}", name, msg()).map(|_|())?;
+        writeln!(io::stderr(), "{}: {}", name, msg()).map(|_| ())?;
         Ok(())
     }
 
@@ -110,7 +115,7 @@ impl<'a> Unpacker<'a> {
         let current_path = || self.current.path.to_vec().join(" / ");
 
         match self.options.listing_output {
-            ListingOutput::None => {},
+            ListingOutput::None => {}
             ListingOutput::Find => {
                 writeln!(stdout, "{} {} {} {} {} {} {} {} {} {}",
                          current_path(),
@@ -118,7 +123,7 @@ impl<'a> Unpacker<'a> {
                          self.current.atime, self.current.mtime, self.current.ctime, self.current.btime,
                          self.current.uid, self.current.gid, self.current.user_name, self.current.group_name,
                 )?;
-            },
+            }
             ListingOutput::Capnp => {
                 entry_capnp::write_capnp(
                     &mut stdout,
@@ -140,7 +145,7 @@ impl<'a> Unpacker<'a> {
                         Ok(())
                     })?;
                 Ok(())
-            },
+            }
         }
     }
 
@@ -271,19 +276,19 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
                             return Some(FormatErrorType::Other);
                         }
                     }
-                },
+                }
                 io::ErrorKind::Other => {
                     if let Some(ref obj) = e.get_ref() {
                         if obj.is::<xz2::stream::Error>() {
                             return Some(FormatErrorType::Other);
                         }
                     }
-                },
+                }
                 io::ErrorKind::BrokenPipe
                 | io::ErrorKind::NotFound
                 | io::ErrorKind::PermissionDenied
                 => return None,
-                _ => {},
+                _ => {}
             }
         }
 
@@ -339,7 +344,7 @@ impl<'a> Unpacker<'a> {
     }
 
     fn process_partition<T>(&self, inner: T) -> Result<bool>
-    where T: io::Read + io::Seek {
+        where T: io::Read + io::Seek {
         let mut failed = false;
         let mut settings = ext4::Options::default();
         settings.checksums = ext4::Checksums::Enabled;
@@ -348,7 +353,7 @@ impl<'a> Unpacker<'a> {
         fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
             use ext4::Enhanced::*;
             match *enhanced {
-                Directory(_) => {},
+                Directory(_) => {}
                 RegularFile => {
                     let mut unpacker = self.with_path(path);
                     {
@@ -457,14 +462,14 @@ impl<'a> Unpacker<'a> {
                 } else {
                     attempt
                 }
-            },
+            }
 
             // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
             FileType::Xz => {
                 self.with_path(self.strip_compression_suffix(".xz"))
                     .unpack_stream_xz(fd)
                     .chain_err(|| "unpacking xz")
-            },
+            }
             FileType::BZip2 => {
                 self.with_path(self.strip_compression_suffix(".bz2"))
                     .unpack_stream_bz2(fd)
@@ -480,18 +485,18 @@ impl<'a> Unpacker<'a> {
                         .chain_err(|| format!("unpacking deb entry {}", unpacker.current.path))?;
                 }
                 Ok(())
-            },
+            }
             FileType::Tar => {
                 self.process_tar(fd)
                     .chain_err(|| "unpacking tar")
-            },
+            }
             FileType::Zip => {
                 self.process_zip(fd.as_seekable()?)
                     .chain_err(|| "reading zip file")
-            },
+            }
             FileType::Other => {
                 Err(ErrorKind::Rewind.into())
-            },
+            }
             FileType::MBR => {
                 let mut fd = fd.as_seekable()?;
                 let mut failed = false;
@@ -576,8 +581,8 @@ impl<'a> Unpacker<'a> {
                     self.log(1, || format!(
                         "thought we could unpack '{}' but we couldn't: {:?} {}",
                         self.current.path, error, error))?;
-                },
-                FormatErrorType::Rewind => {},
+                }
+                FormatErrorType::Rewind => {}
             }
 
             return Ok(true);
@@ -638,55 +643,54 @@ fn must_fit(x: u64) -> u8 {
 }
 
 fn real_main() -> Result<i32> {
-
     let matches = App::new("contentin")
-                    .arg(Arg::with_name("v")
-                        .short("v")
-                        .multiple(true)
-                        .help("Sets the level of verbosity (more for more)"))
-                    .arg(Arg::with_name("headers")
-                        .short("h")
-                        .long("headers")
-                        .possible_values(&[
-                            "none",
-                            "find",
-                            "capnp",
-                        ])
-                        .default_value("find")
-                        .help("What format to write file metadata in")
-                    )
-                    .arg(Arg::with_name("list")
-                        .short("t")
-                        .long("list")
-                        .conflicts_with("to-command")
-                        .help("Show headers only, not object content"))
-                    .arg(Arg::with_name("no-listing")
-                        .short("n")
-                        .long("no-listing")
-                        .conflicts_with("list")
-                        .help("don't print the listing at all"))
-                    .arg(Arg::with_name("grep")
-                        .short("S")
-                        .long("grep")
-                        .takes_value(true)
-                        .help("search for a string in all files"))
-                    .arg(Arg::with_name("max-depth")
-                        .short("d")
-                        .long("max-depth")
-                        .takes_value(true)
-                        .use_delimiter(false)
-                        .default_value("256")
-                        .hide_default_value(true)
-                        .validator(|val| match val.parse::<u32>() {
-                            Ok(_) => Ok(()),
-                            Err(e) => Err(format!("must be valid number: {}", e))
-                        })
-                        .help("Limit recursion. 1: like unzip. Default: lots"))
-                    .arg(Arg::with_name("INPUT")
-                        .required(true)
-                        .help("File(s) to process")
-                        .multiple(true))
-                    .get_matches();
+        .arg(Arg::with_name("v")
+            .short("v")
+            .multiple(true)
+            .help("Sets the level of verbosity (more for more)"))
+        .arg(Arg::with_name("headers")
+            .short("h")
+            .long("headers")
+            .possible_values(&[
+                "none",
+                "find",
+                "capnp",
+            ])
+            .default_value("find")
+            .help("What format to write file metadata in")
+        )
+        .arg(Arg::with_name("list")
+            .short("t")
+            .long("list")
+            .conflicts_with("to-command")
+            .help("Show headers only, not object content"))
+        .arg(Arg::with_name("no-listing")
+            .short("n")
+            .long("no-listing")
+            .conflicts_with("list")
+            .help("don't print the listing at all"))
+        .arg(Arg::with_name("grep")
+            .short("S")
+            .long("grep")
+            .takes_value(true)
+            .help("search for a string in all files"))
+        .arg(Arg::with_name("max-depth")
+            .short("d")
+            .long("max-depth")
+            .takes_value(true)
+            .use_delimiter(false)
+            .default_value("256")
+            .hide_default_value(true)
+            .validator(|val| match val.parse::<u32>() {
+                Ok(_) => Ok(()),
+                Err(e) => Err(format!("must be valid number: {}", e))
+            })
+            .help("Limit recursion. 1: like unzip. Default: lots"))
+        .arg(Arg::with_name("INPUT")
+            .required(true)
+            .help("File(s) to process")
+            .multiple(true))
+        .get_matches();
 
     let mut listing_output = ListingOutput::Find;
     let mut content_output = ContentOutput::Raw;
