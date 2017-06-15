@@ -262,6 +262,9 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
         ErrorKind::Rewind => {
             return Some(FormatErrorType::Rewind);
         }
+        ErrorKind::Tar(_) | ErrorKind::UnsupportedFeature(_) => {
+            return Some(FormatErrorType::Other);
+        }
         ErrorKind::Io(ref e) => {
             // if there's an actual error code (regardless of what it is),
             // it's probably not from a library
@@ -393,29 +396,46 @@ impl<'a> Unpacker<'a> {
     fn process_tar<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
         let mut decoder = tar::Archive::new(fd);
         for entry in decoder.entries()? {
-            let entry = entry?;
-            let mut unpacker = self.with_path(entry.path()?.to_str()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other,
-                                              format!("tar path contains invalid utf-8: {:?}",
-                                                      entry.path_bytes())))?);
+            let entry = entry.map_err(tar_err).chain_err(|| "parsing header")?;
+            let mut unpacker = self.with_path(
+                entry.path().map_err(tar_err)?
+                    .to_str().ok_or_else(
+                    || ErrorKind::UnsupportedFeature(format!("invalid path utf-8: {:?}",
+                                                             entry.path_bytes())))?);
+
             {
                 let current = &mut unpacker.current;
                 let header = entry.header();
-                current.uid = header.uid()?;
-                current.gid = header.gid()?;
-                current.mtime = simple_time_epoch_seconds(header.mtime()?);
+
+                current.uid = header.uid()
+                    .map_err(tar_err)
+                    .chain_err(|| "reading uid")?;
+
+                current.gid = header.gid()
+                    .map_err(tar_err)
+                    .chain_err(|| "reading gid")?;
+
+                current.mtime = simple_time_epoch_seconds(
+                    header.mtime()
+                        .map_err(tar_err)
+                        .chain_err(|| "reading mtime")?);
+
                 if let Some(found) = header.username()
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
-                                                format!("invalid username in tar: {} {:?}", e, header.username_bytes())))? {
+                    .map_err(
+                        |e| ErrorKind::UnsupportedFeature(format!("invalid username utf-8: {} {:?}",
+                                                                  e, header.username_bytes())))? {
                     current.user_name = found.to_string();
                 }
                 if let Some(found) = header.groupname()
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput,
-                                                format!("invalid groupname in tar: {} {:?}", e, header.groupname_bytes())))? {
+                    .map_err(
+                        |e| ErrorKind::UnsupportedFeature(format!("invalid groupname utf-8: {} {:?}",
+                                                                  e, header.groupname_bytes())))? {
                     current.group_name = found.to_string();
                 }
             }
-            unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)?;
+
+            unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)
+                .chain_err(|| format!("processing tar entry: {}", unpacker.current.path.inner()))?;
         }
         Ok(())
     }
@@ -451,7 +471,7 @@ impl<'a> Unpacker<'a> {
                     let unpacker = self.with_gzip(dec.header())?;
 
                     let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
-                    (unpacker.unpack_or_die(&mut failing), unpacker)
+                    (unpacker.unpack_or_die(&mut failing).chain_err(|| "streaming gzip"), unpacker)
                 };
 
 
@@ -726,6 +746,14 @@ fn real_main() -> Result<i32> {
     return Ok(0);
 }
 
+fn tar_err(e: io::Error) -> Error {
+    if io::ErrorKind::Other != e.kind() {
+        return Error::with_chain(e, "reading tar");
+    }
+
+    ErrorKind::Tar(format!("{}", e)).into()
+}
+
 mod errors {
     error_chain! {
         links {
@@ -741,6 +769,14 @@ mod errors {
             Rewind {
                 description("bailin' out")
                 display("rewind")
+            }
+            UnsupportedFeature(msg: String) {
+                description("format is (probably) legal, but we refuse to support its feature")
+                display("unsupported feature: {}", msg)
+            }
+            Tar(msg: String) {
+                description("tar-rs returned Other")
+                display("tar failure message: {}", msg)
             }
         }
     }
