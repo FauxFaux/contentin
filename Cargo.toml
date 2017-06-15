@@ -2,6 +2,7 @@
 members = [
     "ci-gen",
     "ci-pipe",
+    "ci-splay",
     "ci_capnp",
 ]
 

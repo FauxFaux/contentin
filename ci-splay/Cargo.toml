@@ -1,0 +1,11 @@
+[package]
+name = "ci-splay"
+version = "0.1.0"
+authors = ["Chris West (Faux) <git@goeswhere.com>"]
+
+[dependencies]
+ci_capnp = { path = "../ci_capnp" }
+base32 = "0.3.1"
+lz4 = "1.21.0"
+sha2 = "0.6.0"
+tempfile = "2.1.5"
