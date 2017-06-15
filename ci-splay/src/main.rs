@@ -1,8 +1,10 @@
 extern crate base32;
 extern crate ci_capnp;
 extern crate lz4;
+extern crate num_cpus;
 extern crate sha2;
 extern crate tempfile;
+extern crate thread_pool;
 
 use std::fs;
 use std::io;
@@ -40,20 +42,20 @@ fn hash_compress_write<R, W>(mut from: R, to: W) -> (u64, [u8; 256 / 8])
     let (_, result) = lz4.finish();
     result.expect("lz4 finished");
 
-    let mut hash = [0u8; 256 / 8];
-    hash.clone_from_slice(&hasher.result()[..]);
+    (total_read, to_bytes(&hasher.result()[..]))
+}
 
-    (total_read, hash)
+fn to_bytes(slice: &[u8]) -> [u8; 256 / 8] {
+    let mut hash = [0u8; 256 / 8];
+    hash.clone_from_slice(slice);
+    hash
 }
 
 
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();
     assert_eq!(2, args.len());
-    let ref out_dir = args[1];
-
-    // Not really, 'cos we lowercase it!
-    let alphabet = base32::Alphabet::RFC4648 { padding: false };
+    let out_dir = args[1].to_string();
 
     {
         let alphabet_chars = "abcdefghijklmnopqrstuvwxyz234567";
@@ -64,23 +66,56 @@ fn main() {
         }
     }
 
+    let (sender, pool) = thread_pool::Builder::new()
+        .work_queue_capacity(num_cpus::get() * 2)
+        .build();
+
     let mut stdin = io::stdin();
-    while let Some(en) = ci_capnp::read_entry(&mut stdin).expect("") {
+    while let Some(en) = ci_capnp::read_entry(&mut stdin).expect("capnp") {
         if 0 == en.len {
             continue;
         }
 
         let mut temp = tempfile::NamedTempFileOptions::new().suffix(".tmp").
-            create_in(out_dir)
+            create_in(&out_dir)
             .expect("temp file");
 
-        let file_data = (&mut stdin).take(en.len);
-        let (total_read, hash) = hash_compress_write(file_data, &mut temp);
-        assert_eq!(en.len, total_read);
-        let mut encoded_hash = base32::encode(alphabet, &hash);
-        encoded_hash.make_ascii_lowercase();
+        if en.len < 16 * 1024 * 1024 * 1024 {
+            let mut buf = vec![0u8; en.len as usize];
+            stdin.read_exact(&mut buf).expect("read");
 
-        let written_to = format!("{}/{}/1-{}.lz4", out_dir, &encoded_hash[0..2], &encoded_hash[2..]);
-        temp.persist(written_to).expect("rename");
+            let out_dir = out_dir.clone();
+            sender.send(move || {
+
+                let mut hasher = sha2::Sha256::default();
+                {
+                    let mut lz4 = lz4::EncoderBuilder::new()
+                        .build(&mut temp).expect("lz4 writer");
+
+                    hasher.input(&buf);
+                    lz4.write_all(&buf).expect("lz4 writing");
+                    lz4.finish();
+                }
+
+                complete(temp, &hasher.result()[..], out_dir.as_str());
+            }).expect("offloading");
+
+        } else {
+            let file_data = (&mut stdin).take(en.len);
+            let (total_read, hash) = hash_compress_write(file_data, &mut temp);
+            assert_eq!(en.len, total_read);
+
+            complete(temp, &hash, out_dir.as_str());
+        }
     }
+
+    pool.shutdown();
+    pool.await_termination();
+}
+
+fn complete(temp: tempfile::NamedTempFile, hash: &[u8], out_dir: &str) {
+    let mut encoded_hash = base32::encode(base32::Alphabet::RFC4648 { padding: false }, hash);
+    encoded_hash.make_ascii_lowercase();
+    let written_to = format!("{}/{}/1-{}.lz4", out_dir, &encoded_hash[0..2], &encoded_hash[2..]);
+    temp.persist(written_to).expect("rename");
 }

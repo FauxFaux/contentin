@@ -7,5 +7,7 @@ authors = ["Chris West (Faux) <git@goeswhere.com>"]
 ci_capnp = { path = "../ci_capnp" }
 base32 = "0.3.1"
 lz4 = "1.21.0"
+num_cpus = "1.5.1"
 sha2 = "0.6.0"
 tempfile = "2.1.5"
+thread-pool = "0.1.1"
