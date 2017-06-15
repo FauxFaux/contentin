@@ -174,9 +174,23 @@ fn byte_flip_tar() {
 fn byte_flip_tar_bz2() {
     round_trips("tests/byte_flip.tar.bz2")
 }
+
+/// GZIP detects the failure, but only at the end, so we rollback and output the whole archive again
 #[test]
 fn byte_flip_tar_gz() {
-    check_byte_flip("tests/byte_flip.tar.gz", Some("tests/byte_flip.tar"))
+    let test_path = "tests/byte_flip.tar.gz";
+    let entries = entries(test_path).unwrap();
+    assert_eq!(3, entries.len());
+
+    // sorting in test means the archive comes out first (the order is undefined anyway...)
+    assert_eq!(1, entries[0].entry.paths.len());
+    assert_eq!(test_path, entries[0].entry.paths[0]);
+
+    // this crc should be correct
+    assert_eq!(2806881067, entries[1].crc);
+
+    // this crc should be wrong...
+    assert_eq!(1897953606, entries[2].crc);
 }
 #[test]
 fn byte_flip_tar_xz() {

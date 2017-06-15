@@ -287,6 +287,14 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
                         }
                     }
                 }
+                io::ErrorKind::InvalidData => {
+                    use std::error::Error;
+
+                    // GZIP
+                    if e.description().starts_with("CRC32 mismatched: ") {
+                        return Some(FormatErrorType::Other);
+                    }
+                }
                 io::ErrorKind::BrokenPipe
                 | io::ErrorKind::NotFound
                 | io::ErrorKind::PermissionDenied
