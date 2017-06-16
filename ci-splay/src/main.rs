@@ -99,7 +99,7 @@ fn main() {
             create_in(&out_dir)
             .expect("temp file");
 
-        if en.len < 16 * 1024 * 1024 * 1024 {
+        if en.len < 16 * 1024 * 1024 {
             let mut buf = vec![0u8; en.len as usize];
             stdin.read_exact(&mut buf).expect("read");
 
