@@ -15,15 +15,34 @@ use std::ascii::AsciiExt;
 use std::io::Read;
 use std::io::Write;
 
-fn hash_compress_write<R, W>(mut from: R, to: W) -> (u64, [u8; 256 / 8])
+fn tools() -> (
+    sha2::Sha256,
+    lz4::EncoderBuilder,
+) {
+    (
+        sha2::Sha256::default(),
+        lz4::EncoderBuilder::new(),
+    )
+}
+
+fn hash_compress_write_from_slice<W>(buf: &[u8], to: W) -> [u8; 256 / 8]
+    where W: Write {
+    let (mut hasher, lz4) = tools();
+    let mut lz4 = lz4.build(to).expect("lz4 writer");
+
+    hasher.input(buf);
+    lz4.write_all(buf).expect("lz4 writing");
+    lz4.finish();
+
+    to_bytes(&hasher.result()[..])
+}
+
+fn hash_compress_write_from_reader<R, W>(mut from: R, to: W) -> (u64, [u8; 256 / 8])
     where W: Write,
           R: Read
 {
-    let mut hasher = sha2::Sha256::default();
-
-    let mut lz4 = lz4::EncoderBuilder::new()
-        .build(to).expect("lz4 writer");
-
+    let (mut hasher, lz4) = tools();
+    let mut lz4 = lz4.build(to).expect("lz4 writer");
 
     let mut total_read = 0u64;
     loop {
@@ -87,22 +106,16 @@ fn main() {
             let out_dir = out_dir.clone();
             sender.send(move || {
 
-                let mut hasher = sha2::Sha256::default();
-                {
-                    let mut lz4 = lz4::EncoderBuilder::new()
-                        .build(&mut temp).expect("lz4 writer");
+                let hash = hash_compress_write_from_slice(&buf, &mut temp);
 
-                    hasher.input(&buf);
-                    lz4.write_all(&buf).expect("lz4 writing");
-                    lz4.finish();
-                }
+                complete(temp, &hash, out_dir.as_str());
 
-                complete(temp, &hasher.result()[..], out_dir.as_str());
             }).expect("offloading");
 
         } else {
+
             let file_data = (&mut stdin).take(en.len);
-            let (total_read, hash) = hash_compress_write(file_data, &mut temp);
+            let (total_read, hash) = hash_compress_write_from_reader(file_data, &mut temp);
             assert_eq!(en.len, total_read);
 
             complete(temp, &hash, out_dir.as_str());
