@@ -12,9 +12,9 @@ use std::io::Seek;
 use std::io::Write;
 
 pub trait Tee: io::BufRead {
-    fn reset(&mut self) -> io::Result<()>;
-    fn len_and_reset(&mut self) -> io::Result<u64>;
-    fn as_seekable(&mut self) -> io::Result<&mut Seeker>;
+    fn reset(&mut self) -> Result<()>;
+    fn len_and_reset(&mut self) -> Result<u64>;
+    fn as_seekable(&mut self) -> Result<&mut Seeker>;
 }
 
 pub struct TempFileTee {
@@ -68,17 +68,18 @@ const BEGINNING: io::SeekFrom = io::SeekFrom::Start(0);
 const END: io::SeekFrom = io::SeekFrom::End(0);
 
 impl Tee for TempFileTee {
-    fn reset(&mut self) -> io::Result<()> {
+    fn reset(&mut self) -> Result<()> {
         self.inner.seek(BEGINNING).map(|_| ())
+            .chain_err(|| "resetting TempFileTee")
     }
 
-    fn len_and_reset(&mut self) -> io::Result<u64> {
+    fn len_and_reset(&mut self) -> Result<u64> {
         let len = self.inner.seek(END)?;
         self.reset()?;
         Ok(len)
     }
 
-    fn as_seekable(&mut self) -> io::Result<&mut Seeker> {
+    fn as_seekable(&mut self) -> Result<&mut Seeker> {
         Ok(&mut self.inner)
     }
 }
@@ -116,17 +117,18 @@ impl<R: io::Read> BufReaderTee<R> {
 impl<R: io::Read> Tee for BufReaderTee<R>
     where R: io::Seek + 'static
 {
-    fn reset(&mut self) -> io::Result<()> {
+    fn reset(&mut self) -> Result<()> {
         self.inner.seek(io::SeekFrom::Start(0)).map(|_| ())
+            .chain_err(|| "resetting BufReaderTee")
     }
 
-    fn len_and_reset(&mut self) -> io::Result<u64> {
+    fn len_and_reset(&mut self) -> Result<u64> {
         let len = self.inner.seek(END)?;
         self.reset()?;
         Ok(len)
     }
 
-    fn as_seekable(&mut self) -> io::Result<&mut Seeker> {
+    fn as_seekable(&mut self) -> Result<&mut Seeker> {
         Ok(&mut *self.inner)
     }
 }
@@ -164,16 +166,15 @@ impl<U: io::Read> FailingTee<io::BufReader<U>> {
 impl<T> Tee for FailingTee<T>
     where T: io::BufRead
 {
-    // TODO: I don't think these are unreachable; e.g. a bad gzip stream inside a gzip stream.
-    fn reset(&mut self) -> io::Result<()> {
-        unreachable!();
+    fn reset(&mut self) -> Result<()> {
+        bail!(ErrorKind::UnsupportedFeature("resetting a failing tee".to_string()))
     }
 
-    fn len_and_reset(&mut self) -> io::Result<u64> {
-        unreachable!();
+    fn len_and_reset(&mut self) -> Result<u64> {
+        bail!(ErrorKind::UnsupportedFeature("len-resetting a failing tee".to_string()))
     }
 
-    fn as_seekable(&mut self) -> io::Result<&mut Seeker> {
+    fn as_seekable(&mut self) -> Result<&mut Seeker> {
         let mut temp = tempfile()?;
         {
             let mut fd = io::BufWriter::new(&mut temp);
