@@ -257,6 +257,29 @@ enum FormatErrorType {
     Other,
 }
 
+fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
+    // if there's an actual error code (regardless of what it is),
+    // it's probably not from a library
+    if e.raw_os_error().is_some() {
+        return Some(None);
+    }
+
+    match e.kind() {
+        io::ErrorKind::InvalidData
+        | io::ErrorKind::InvalidInput
+        | io::ErrorKind::Other
+        | io::ErrorKind::UnexpectedEof
+        => return Some(Some(FormatErrorType::Other)),
+        io::ErrorKind::BrokenPipe
+        | io::ErrorKind::NotFound
+        | io::ErrorKind::PermissionDenied
+        => return Some(None),
+        _ => {}
+    }
+
+    None
+}
+
 fn is_format_error(e: &Error) -> Option<FormatErrorType> {
     match *e.kind() {
         ErrorKind::Rewind => {
@@ -266,23 +289,8 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
             return Some(FormatErrorType::Other);
         }
         ErrorKind::Io(ref e) => {
-            // if there's an actual error code (regardless of what it is),
-            // it's probably not from a library
-            if e.raw_os_error().is_some() {
-                return None;
-            }
-
-            match e.kind() {
-                io::ErrorKind::InvalidData
-                | io::ErrorKind::InvalidInput
-                | io::ErrorKind::Other
-                | io::ErrorKind::UnexpectedEof
-                => return Some(FormatErrorType::Other),
-                io::ErrorKind::BrokenPipe
-                | io::ErrorKind::NotFound
-                | io::ErrorKind::PermissionDenied
-                => return None,
-                _ => {}
+            if let Some(result) = is_io_format_error(e) {
+                return result;
             }
         }
 
@@ -592,6 +600,8 @@ impl<'a> Unpacker<'a> {
             } else if oh_look_fixed.is::<ext4::Error>() {
                 // see zip comment above
                 Some(FormatErrorType::Other)
+            } else if let Some(e) = oh_look_fixed.downcast_ref::<io::Error>() {
+                is_io_format_error(e).unwrap_or(None)
             } else {
                 self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
                 None
