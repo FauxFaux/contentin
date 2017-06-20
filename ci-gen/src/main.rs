@@ -273,34 +273,10 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
             }
 
             match e.kind() {
-                io::ErrorKind::InvalidInput => {
-                    if let Some(ref obj) = e.get_ref() {
-                        if obj.is::<bzip2::Error>() {
-                            return Some(FormatErrorType::Other);
-                        }
-                    }
-                }
-                io::ErrorKind::Other => {
-                    if let Some(ref obj) = e.get_ref() {
-                        if obj.is::<xz2::stream::Error>() {
-                            return Some(FormatErrorType::Other);
-                        }
-                    }
-
-                    // ZIP
-                    use std::error::Error;
-                    if "Invalid checksum" == e.description() {
-                        return Some(FormatErrorType::Other);
-                    }
-                }
-                io::ErrorKind::InvalidData => {
-                    use std::error::Error;
-
-                    // GZIP
-                    if e.description().starts_with("CRC32 mismatched: ") {
-                        return Some(FormatErrorType::Other);
-                    }
-                }
+                io::ErrorKind::InvalidData
+                | io::ErrorKind::InvalidInput
+                | io::ErrorKind::Other
+                => return Some(FormatErrorType::Other),
                 io::ErrorKind::BrokenPipe
                 | io::ErrorKind::NotFound
                 | io::ErrorKind::PermissionDenied
