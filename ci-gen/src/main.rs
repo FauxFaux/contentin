@@ -276,6 +276,7 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
                 io::ErrorKind::InvalidData
                 | io::ErrorKind::InvalidInput
                 | io::ErrorKind::Other
+                | io::ErrorKind::UnexpectedEof
                 => return Some(FormatErrorType::Other),
                 io::ErrorKind::BrokenPipe
                 | io::ErrorKind::NotFound
