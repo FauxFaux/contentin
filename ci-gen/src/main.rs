@@ -589,6 +589,9 @@ impl<'a> Unpacker<'a> {
 
                 // This is just a copy-paste of is_format_error's Zip(_) => Other
                 Some(FormatErrorType::Other)
+            } else if oh_look_fixed.is::<ext4::Error>() {
+                // see zip comment above
+                Some(FormatErrorType::Other)
             } else {
                 self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
                 None
