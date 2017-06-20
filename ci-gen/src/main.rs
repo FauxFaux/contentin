@@ -601,18 +601,24 @@ impl<'a> Unpacker<'a> {
         // TODO: i.e. error.cause() is totally useless
 
         let broken_ref = error.iter().last().unwrap();
-        let error: Option<&errors::Error> = unsafe {
+        let problem = unsafe {
             let oh_look_fixed: &'static std::error::Error = std::mem::transmute(broken_ref);
-            oh_look_fixed.downcast_ref::<errors::Error>()
+
+            if let Some(e) = oh_look_fixed.downcast_ref::<errors::Error>() {
+                is_format_error(e)
+            } else if oh_look_fixed.is::<zip::result::ZipError>() {
+                // Most zip errors should be wrapped in an errors::Error,
+                // but https://github.com/brson/error-chain/issues/159
+
+                // This is just a copy-paste of is_format_error's Zip(_) => Other
+                Some(FormatErrorType::Other)
+            } else {
+                self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
+                None
+            }
         };
 
-        if error.is_none() {
-            return Ok(false);
-        }
-
-        let error = error.unwrap();
-
-        if let Some(specific) = is_format_error(&error) {
+        if let Some(specific) = problem {
             match specific {
                 FormatErrorType::Other => {
                     self.log(1, || format!(
@@ -622,16 +628,10 @@ impl<'a> Unpacker<'a> {
                 FormatErrorType::Rewind => {}
             }
 
-            return Ok(true);
+            Ok(true)
+        } else {
+            Ok(false)
         }
-
-        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-        // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-
-        Ok(false)
     }
 
     fn unpack(&self, mut fd: Box<Tee>) -> Result<()> {
