@@ -328,11 +328,13 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
 impl<'a> Unpacker<'a> {
     fn process_zip<T>(&self, from: T) -> Result<()>
         where T: io::Read + io::Seek {
-        let mut zip = zip::ZipArchive::new(from)?;
+        let mut zip = zip::ZipArchive::new(from)
+            .chain_err(|| "opening zip")?;
 
         for i in 0..zip.len() {
             let unpacker = {
-                let entry = zip.by_index(i)?;
+                let entry = zip.by_index(i)
+                    .chain_err(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
                 unpacker.current.mtime = simple_time_tm(entry.last_modified());
@@ -349,7 +351,8 @@ impl<'a> Unpacker<'a> {
             if self.is_format_error_result(&res)? {
                 let new_entry = zip.by_index(i)?;
                 let size = new_entry.size();
-                unpacker.complete_details(new_entry, size)?;
+                unpacker.complete_details(new_entry, size)
+                    .chain_err(|| "..after rollback")?;
                 continue;
             }
 
