@@ -2,7 +2,7 @@
 name = "ci_capnp"
 version = "0.1.0"
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
-build = "../ci-shared/build.rs"
+build = "build.rs"
 
 [dependencies]
 capnp = "0.8.10"

@@ -1,11 +1,9 @@
 
-#![allow(unused)]
-include!(concat!(env!("OUT_DIR"), "/../entry_capnp.rs"));
-
 use std;
 use std::io;
 
 use capnp;
+use ci_capnp::entry;
 
 pub fn write_capnp<W: io::Write>(
     to: &mut W,

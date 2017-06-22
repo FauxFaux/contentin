@@ -1,6 +1,7 @@
 extern crate ar;
 extern crate bzip2;
 extern crate capnp;
+extern crate ci_capnp;
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
@@ -23,7 +24,7 @@ use clap::{Arg, App};
 
 use libflate::gzip;
 
-mod entry_capnp;
+mod output_capnp;
 
 mod filetype;
 
@@ -125,7 +126,7 @@ impl<'a> Unpacker<'a> {
                 )?;
             }
             ListingOutput::Capnp => {
-                entry_capnp::write_capnp(
+                output_capnp::write_capnp(
                     &mut stdout,
                     &self.current,
                     &self.options.content_output,
