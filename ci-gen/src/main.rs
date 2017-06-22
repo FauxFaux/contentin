@@ -66,6 +66,11 @@ struct Options {
     verbose: u8,
 }
 
+enum ArchiveReadFailure {
+    Open(String),
+    Read(String),
+}
+
 pub struct FileDetails {
     path: SList<String>,
     depth: u32,
@@ -77,6 +82,7 @@ pub struct FileDetails {
     gid: u32,
     user_name: String,
     group_name: String,
+    failure: Option<ArchiveReadFailure>,
 }
 
 pub struct Unpacker<'a> {
@@ -170,6 +176,7 @@ impl<'a> Unpacker<'a> {
                 group_name: users::get_group_by_gid(stat.gid)
                     .map(|group| group.name().to_string())
                     .unwrap_or(String::new()),
+                failure: None,
             },
         })
     }
@@ -188,6 +195,7 @@ impl<'a> Unpacker<'a> {
                 gid: 0,
                 user_name: String::new(),
                 group_name: String::new(),
+                failure: None,
             },
         }
     }
