@@ -41,22 +41,11 @@ pub fn is_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorType> {
 
     let error = res.as_ref().err().unwrap();
 
-    // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-    // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-    // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-    // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-    // UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-
-    // TODO: working around https://github.com/rust-lang/rust/issues/35943
-    // TODO: i.e. error.cause() is totally useless
-
     let broken_ref = error.iter().last().unwrap();
 
-    let oh_look_fixed = unsafe_staticify(broken_ref);
-
-    if let Some(e) = oh_look_fixed.downcast_ref::<Error>() {
+    if let Some(e) = unsafe_staticify(broken_ref).downcast_ref::<Error>() {
         is_format_error(e)
-    } else if oh_look_fixed.is::<zip::result::ZipError>() {
+    } else if unsafe_staticify(broken_ref).is::<zip::result::ZipError>() {
         // Most zip errors should be wrapped in an errors::Error,
         // but https://github.com/brson/error-chain/issues/159
 
@@ -113,6 +102,18 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
     None
 }
 
+/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
+///
+/// TODO: working around https://github.com/rust-lang/rust/issues/35943
+/// TODO: i.e. error.cause() is totally useless
+///
+/// This allows methods from the `Any` trait to be executed, e.g.
+/// is::<> and downcast_ref::<>. I recommend you run them immediately;
+/// i.e. don't even put the result of the method into a local.
 fn unsafe_staticify(err: &error::Error) -> &'static error::Error {
     unsafe {
         std::mem::transmute(err)
