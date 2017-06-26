@@ -569,7 +569,7 @@ impl<'a> Unpacker<'a> {
 
     fn is_format_error_result<T>(&self, res: &Result<T>) -> Result<bool> {
 
-        let problem = errors::is_format_error_result(res);
+        let problem = errors::classify_format_error_result(res);
 
         if let Some(specific) = problem {
             match specific {

@@ -31,12 +31,13 @@ error_chain! {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum FormatErrorType {
     Rewind,
     Other,
 }
 
-pub fn is_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorType> {
+pub fn classify_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorType> {
     if res.is_ok() {
         return None;
     }
@@ -146,6 +147,33 @@ mod tests {
         } else {
             Err(zip::result::ZipError::FileNotFound)
         }
+    }
+
+    fn simulate_second_failure(input: bool) -> zip::result::ZipResult<bool> {
+        if !input {
+            Ok(input)
+        } else {
+            Err(zip::result::ZipError::Io(io::ErrorKind::BrokenPipe.into()))
+        }
+    }
+
+    #[test]
+    fn real_format_error() {
+        let failure = simulate_failure(true).chain_err(|| "oops");
+        assert!(classify_format_error_result(&failure).unwrap() == FormatErrorType::Other);
+    }
+
+    #[test]
+    fn io_error_is_not_format() {
+        let err: io::Error = io::ErrorKind::BrokenPipe.into();
+        let res: Result<()> = Err(err).chain_err(|| "oops");
+        assert!(classify_format_error_result(&res).is_none())
+    }
+
+    #[test]
+    fn nested_zip_failure_is_not_format() {
+        let failure = simulate_second_failure(true).chain_err(|| "oops");
+        assert!(classify_format_error_result(&failure).is_none())
     }
 
     #[test]
