@@ -75,6 +75,7 @@ pub struct FileDetails {
     gid: u32,
     user_name: String,
     group_name: String,
+    mode: u32,
     failure: Option<ArchiveReadFailure>,
 }
 
@@ -175,6 +176,7 @@ impl<'a> Unpacker<'a> {
                 group_name: users::get_group_by_gid(stat.gid)
                     .map(|group| group.name().to_string())
                     .unwrap_or(String::new()),
+                mode: stat.mode,
                 failure: None,
             },
         })
@@ -194,6 +196,7 @@ impl<'a> Unpacker<'a> {
                 gid: 0,
                 user_name: String::new(),
                 group_name: String::new(),
+                mode: 0,
                 failure: None,
             },
         }
@@ -282,7 +285,7 @@ impl<'a> Unpacker<'a> {
                 let mut unpacker = self.with_path(entry.name());
 
                 unpacker.current.mtime = simple_time_tm(entry.last_modified());
-                // unpacker.current.mode = entry.unix_mode().unwrap_or(0);
+                unpacker.current.mode = entry.unix_mode().unwrap_or(0);
                 unpacker
             };
 
@@ -339,6 +342,7 @@ impl<'a> Unpacker<'a> {
                                 Some(btime) => simple_time_ext4(btime),
                                 None => 0,
                             };
+                            current.mode = stat.file_mode as u32
                         }
 
                         // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
@@ -408,6 +412,8 @@ impl<'a> Unpacker<'a> {
                 {
                     current.group_name = found.to_string();
                 }
+
+                current.mode = header.mode()?;
             }
 
             unpacker

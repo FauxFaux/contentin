@@ -44,7 +44,7 @@ pub fn write_capnp<W: io::Write>(
                 group.set_name(current.group_name.as_str());
             }
 
-            // TODO: mode
+            posix.set_mode(current.mode);
         }
 
         {

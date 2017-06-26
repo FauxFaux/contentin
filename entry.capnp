@@ -82,10 +82,10 @@ struct DeviceNumbers {
     # Even though I've never seen a device number over ~255,
     # man:mknod(2) defines these as mode_t and dev_t respectively,
     # which the current kernel has as:
-    # mode_t: "unsigned short" (16-bits on all Debian platforms)
+    # mode_t: "unsigned short" or "unsigned int", so assuming a 32-bit int here
     # dev_t: "u32" (much less ambiguous)
 
-    major @0 :UInt16;
+    major @0 :UInt32;
     minor @1 :UInt32;
 }
 

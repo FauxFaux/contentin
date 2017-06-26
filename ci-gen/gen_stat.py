@@ -20,6 +20,7 @@ pub struct Stat {
     pub gid: u32,
     pub ctime: i64,
     pub ctime_nano: i64,
+    pub mode: u32,
 }
 
 impl Stat {
@@ -35,6 +36,7 @@ for os in OSES:
             gid: meta.st_gid(),
             ctime: meta.st_ctime(),
             ctime_nano: meta.st_ctime_nsec(),
+            mode: meta.st_mode(),
         }}
     }}
 """.format(os)
@@ -47,6 +49,7 @@ F += """
             gid: 0,
             ctime: 0,
             ctime_nano: 0,
+            mode: 0,
         }}
     }}
 }}
