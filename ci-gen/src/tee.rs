@@ -3,9 +3,9 @@ use std::io;
 
 use tempfile::tempfile;
 
-use ::Unpacker;
+use Unpacker;
 
-use ::errors::*;
+use errors::*;
 
 // magic
 use std::io::Seek;
@@ -44,7 +44,9 @@ impl TempFileTee {
         let mut buf = [0u8; MEM_LIMIT];
         let read = read_all(&mut from, &mut buf)?;
         if read < MEM_LIMIT {
-            return Ok(Box::new(BufReaderTee::new(io::Cursor::new(buf[..read].to_vec()))));
+            return Ok(Box::new(
+                BufReaderTee::new(io::Cursor::new(buf[..read].to_vec())),
+            ));
         }
 
         let mut tmp = tempfile()?;
@@ -53,14 +55,17 @@ impl TempFileTee {
             let mut writer = io::BufWriter::new(&tmp);
             writer.write_all(&buf)?;
             let written = io::copy(&mut from, &mut writer)?;
-            log.log(3, || format!("file spills to temp file: {}kB", (MEM_LIMIT as u64 + written) / 1024))?;
+            log.log(3, || {
+                format!(
+                    "file spills to temp file: {}kB",
+                    (MEM_LIMIT as u64 + written) / 1024
+                )
+            })?;
         }
 
         tmp.seek(BEGINNING)?;
 
-        Ok(Box::new(TempFileTee {
-            inner: io::BufReader::new(tmp),
-        }))
+        Ok(Box::new(TempFileTee { inner: io::BufReader::new(tmp) }))
     }
 }
 
@@ -69,8 +74,9 @@ const END: io::SeekFrom = io::SeekFrom::End(0);
 
 impl Tee for TempFileTee {
     fn reset(&mut self) -> Result<()> {
-        self.inner.seek(BEGINNING).map(|_| ())
-            .chain_err(|| "resetting TempFileTee")
+        self.inner.seek(BEGINNING).map(|_| ()).chain_err(
+            || "resetting TempFileTee",
+        )
     }
 
     fn len_and_reset(&mut self) -> Result<u64> {
@@ -108,17 +114,18 @@ pub struct BufReaderTee<R: io::Read> {
 
 impl<R: io::Read> BufReaderTee<R> {
     pub fn new(from: R) -> Self {
-        BufReaderTee {
-            inner: Box::new(io::BufReader::new(from))
-        }
+        BufReaderTee { inner: Box::new(io::BufReader::new(from)) }
     }
 }
 
 impl<R: io::Read> Tee for BufReaderTee<R>
-    where R: io::Seek + 'static
+where
+    R: io::Seek + 'static,
 {
     fn reset(&mut self) -> Result<()> {
-        self.inner.seek(io::SeekFrom::Start(0)).map(|_| ())
+        self.inner
+            .seek(io::SeekFrom::Start(0))
+            .map(|_| ())
             .chain_err(|| "resetting BufReaderTee")
     }
 
@@ -164,14 +171,19 @@ impl<U: io::Read> FailingTee<io::BufReader<U>> {
 }
 
 impl<T> Tee for FailingTee<T>
-    where T: io::BufRead
+where
+    T: io::BufRead,
 {
     fn reset(&mut self) -> Result<()> {
-        bail!(ErrorKind::UnsupportedFeature("resetting a failing tee".to_string()))
+        bail!(ErrorKind::UnsupportedFeature(
+            "resetting a failing tee".to_string(),
+        ))
     }
 
     fn len_and_reset(&mut self) -> Result<u64> {
-        bail!(ErrorKind::UnsupportedFeature("len-resetting a failing tee".to_string()))
+        bail!(ErrorKind::UnsupportedFeature(
+            "len-resetting a failing tee".to_string(),
+        ))
     }
 
     fn as_seekable(&mut self) -> Result<&mut Seeker> {
@@ -190,14 +202,18 @@ impl<T> Tee for FailingTee<T>
 }
 
 impl<T> io::Read for FailingTee<T>
-    where T: io::Read {
+where
+    T: io::Read,
+{
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf)
     }
 }
 
 impl<T> io::BufRead for FailingTee<T>
-    where T: io::BufRead {
+where
+    T: io::BufRead,
+{
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         self.inner.fill_buf()
     }
@@ -207,11 +223,12 @@ impl<T> io::BufRead for FailingTee<T>
     }
 }
 
-pub trait Seeker: io::Seek + io::Read {
-}
+pub trait Seeker: io::Seek + io::Read {}
 
 impl<R: io::Read> Seeker for io::BufReader<R>
-    where R: io::Seek {
+where
+    R: io::Seek,
+{
 }
 
 pub struct BoxReader<'a, R: io::Read + 'a> {
@@ -225,7 +242,9 @@ impl<'a, R: io::Read> io::Read for BoxReader<'a, R> {
 }
 
 impl<'a, R> io::BufRead for BoxReader<'a, R>
-where R: io::BufRead {
+where
+    R: io::BufRead,
+{
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         self.inner.fill_buf()
     }
@@ -264,10 +283,7 @@ mod tests {
 
     #[test]
     fn repeated_read_short() {
-        let mut r = Readie {
-            limit: 1,
-            len: 5,
-        };
+        let mut r = Readie { limit: 1, len: 5 };
         let mut a = [0u8; 8];
         assert_eq!(5, tee::read_all(&mut r, &mut a).expect("read"));
         assert_eq!([1, 1, 1, 1, 1, 0, 0, 0], a);
@@ -276,10 +292,7 @@ mod tests {
 
     #[test]
     fn repeated_read_over() {
-        let mut r = Readie {
-            limit: 2,
-            len: 12,
-        };
+        let mut r = Readie { limit: 2, len: 12 };
         let mut a = [0u8; 8];
         assert_eq!(8, tee::read_all(&mut r, &mut a).expect("read"));
         assert_eq!([1, 2, 1, 2, 1, 2, 1, 2], a);
@@ -287,10 +300,7 @@ mod tests {
 
     #[test]
     fn repeated_read_whole() {
-        let mut r = Readie {
-            limit: 12,
-            len: 8,
-        };
+        let mut r = Readie { limit: 12, len: 8 };
         let mut a = [0u8; 8];
         assert_eq!(8, tee::read_all(&mut r, &mut a).expect("read"));
         assert_eq!([1, 2, 3, 4, 5, 6, 7, 8], a);

@@ -3,7 +3,7 @@ use std::fmt;
 use std::rc::Rc;
 
 pub struct SList<T> {
-    head: Rc<Node<T>>
+    head: Rc<Node<T>>,
 }
 
 impl<T: Clone> SList<T> {
@@ -12,7 +12,7 @@ impl<T: Clone> SList<T> {
             head: Rc::new(Node {
                 next: None,
                 value: obj,
-            })
+            }),
         }
     }
 
@@ -20,8 +20,8 @@ impl<T: Clone> SList<T> {
         SList {
             head: Rc::new(Node {
                 next: Some(self.head.clone()),
-                value: obj
-            })
+                value: obj,
+            }),
         }
     }
 
@@ -36,9 +36,7 @@ impl<T: Clone> SList<T> {
     }
 
     pub fn iter(&self) -> SListIter<T> {
-        SListIter {
-            next: Some(self.head.clone())
-        }
+        SListIter { next: Some(self.head.clone()) }
     }
 }
 
@@ -60,7 +58,9 @@ impl<T: Clone> Iterator for SListIter<T> {
 }
 
 impl<T: fmt::Display> fmt::Display for SList<T>
-where T: Clone + fmt::Debug {
+where
+    T: Clone + fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.to_vec())
     }

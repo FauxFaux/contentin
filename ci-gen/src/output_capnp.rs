@@ -9,7 +9,8 @@ pub fn write_capnp<W: io::Write>(
     to: &mut W,
     current: &::FileDetails,
     content_output: &::ContentOutput,
-    size: u64) -> io::Result<()> {
+    size: u64,
+) -> io::Result<()> {
 
     let mut message = capnp::message::Builder::new_default();
     {
@@ -61,10 +62,10 @@ pub fn write_capnp<W: io::Write>(
             match *content_output {
                 ::ContentOutput::None => {
                     content.set_absent(());
-                },
+                }
                 ::ContentOutput::Raw => {
                     content.set_follows(());
-                },
+                }
             }
         }
     }

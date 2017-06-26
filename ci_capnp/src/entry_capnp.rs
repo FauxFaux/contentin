@@ -36,9 +36,7 @@ impl<'a, R: io::Read + 'a> io::Read for PeekyRead<'a, R> {
                 self.peeked = None;
                 Ok(1)
             }
-            None => {
-                self.inner.read(buf)
-            }
+            None => self.inner.read(buf),
         }
     }
 }
@@ -63,7 +61,7 @@ impl<'a, R: io::Read> PeekyRead<'a, R> {
             1 => {
                 self.peeked = Some(buf[0]);
                 false
-            },
+            }
             _ => unreachable!(),
         })
     }
@@ -81,7 +79,9 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
     let entry = message.get_root::<entry::Reader>()?;
 
     if 0x0100C1C1 != entry.get_magic() {
-        return Err(capnp::Error::failed("invalid magic after decoding; invalid stream?".to_string()));
+        return Err(capnp::Error::failed(
+            "invalid magic after decoding; invalid stream?".to_string(),
+        ));
     }
 
     let entry_paths = entry.get_paths()?;
@@ -107,6 +107,6 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
         content_follows: match entry.get_content().which()? {
             entry::content::Which::Follows(()) => true,
             _ => false,
-        }
+        },
     }))
 }

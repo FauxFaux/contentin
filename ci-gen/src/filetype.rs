@@ -32,7 +32,7 @@ fn read_octal(bytes: &[u8]) -> Option<u32> {
         end -= 1;
     }
 
-    if let Ok(string) = std::str::from_utf8(&bytes[start..(end+1)]) {
+    if let Ok(string) = std::str::from_utf8(&bytes[start..(end + 1)]) {
         if let Ok(val) = u32::from_str_radix(string, 8) {
             return Some(val);
         }
@@ -84,6 +84,7 @@ fn is_probably_mbr(header: &[u8]) -> bool {
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
 
 impl FileType {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     pub fn identify<'a>(header: &[u8]) -> FileType {
         if header.len() >= 20
             && 0x1f == header[0] && 0x8b == header[1] {

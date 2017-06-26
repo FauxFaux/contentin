@@ -10,6 +10,5 @@ pub use entry_capnp::read_entry;
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
-    }
+    fn it_works() {}
 }

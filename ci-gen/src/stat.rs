@@ -10,7 +10,6 @@ pub struct Stat {
 }
 
 impl Stat {
-
     #[cfg(target_os = "android")]
     pub fn from(meta: &fs::Metadata) -> Stat {
         use std::os::android::fs::MetadataExt;
@@ -88,13 +87,9 @@ impl Stat {
         }
     }
 
-    #[cfg(not(any(target_os = "android",
-                  target_os = "freebsd",
-                  target_os = "haiku",
-                  target_os = "ios",
-                  target_os = "linux",
-                  target_os = "netbsdosx",
-                  target_os = "solaris")))]
+    #[cfg(not(any(target_os = "android", target_os = "freebsd", target_os = "haiku",
+                      target_os = "ios", target_os = "linux", target_os = "netbsdosx",
+                      target_os = "solaris")))]
     pub fn from(meta: &fs::Metadata) -> Stat {
         Stat {
             uid: 0,
@@ -104,4 +99,3 @@ impl Stat {
         }
     }
 }
-

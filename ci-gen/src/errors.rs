@@ -59,7 +59,7 @@ pub fn is_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorType> {
     } else if let Some(e) = unsafe_staticify(broken_ref).downcast_ref::<io::Error>() {
         is_io_format_error(e).unwrap_or(None)
     } else {
-//            self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
+        //            self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
         None
     }
 }
@@ -69,13 +69,14 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
         ErrorKind::Rewind => {
             return Some(FormatErrorType::Rewind);
         }
-        ErrorKind::Tar(_) | ErrorKind::UnsupportedFeature(_) => {
+        ErrorKind::Tar(_) |
+        ErrorKind::UnsupportedFeature(_) => {
             return Some(FormatErrorType::Other);
         }
         ErrorKind::Io(ref e) => {
             if let Some(result) = is_io_format_error(e) {
                 return result;
-             }
+            }
         }
 
         ErrorKind::Ext4(_) => {
@@ -102,15 +103,13 @@ fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
     }
 
     match e.kind() {
-        io::ErrorKind::InvalidData
-        | io::ErrorKind::InvalidInput
-        | io::ErrorKind::Other
-        | io::ErrorKind::UnexpectedEof
-        => return Some(Some(FormatErrorType::Other)),
-        io::ErrorKind::BrokenPipe
-        | io::ErrorKind::NotFound
-        | io::ErrorKind::PermissionDenied
-        => return Some(None),
+        io::ErrorKind::InvalidData |
+        io::ErrorKind::InvalidInput |
+        io::ErrorKind::Other |
+        io::ErrorKind::UnexpectedEof => return Some(Some(FormatErrorType::Other)),
+        io::ErrorKind::BrokenPipe |
+        io::ErrorKind::NotFound |
+        io::ErrorKind::PermissionDenied => return Some(None),
         _ => {}
     }
 
@@ -130,9 +129,7 @@ fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
 /// is::<> and downcast_ref::<>. I recommend you run them immediately;
 /// i.e. don't even put the result of the method into a local.
 fn unsafe_staticify(err: &error::Error) -> &'static error::Error {
-    unsafe {
-        std::mem::transmute(err)
-    }
+    unsafe { std::mem::transmute(err) }
 }
 
 
@@ -157,11 +154,11 @@ mod tests {
         let explicit = Error::with_chain(simulate_failure(true).unwrap_err(), "whoopsie");
 
         match literate.kind() {
-            &ErrorKind::Msg(_) => {},
+            &ErrorKind::Msg(_) => {}
             _ => panic!(),
         };
         match explicit.kind() {
-            &ErrorKind::Msg(_) => {},
+            &ErrorKind::Msg(_) => {}
             _ => panic!(),
         }
 

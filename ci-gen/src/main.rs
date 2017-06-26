@@ -95,7 +95,8 @@ pub struct Unpacker<'a> {
 
 impl<'a> Unpacker<'a> {
     fn log<T: fmt::Display, F>(&self, level: u8, msg: F) -> Result<()>
-        where F: FnOnce() -> T
+    where
+        F: FnOnce() -> T,
     {
         if self.options.verbose < level {
             return Ok(());
@@ -106,7 +107,7 @@ impl<'a> Unpacker<'a> {
             1 => "warn",
             2 => "info",
             3 => "debug",
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         writeln!(io::stderr(), "{}: {}", name, msg()).map(|_| ())?;
@@ -139,21 +140,26 @@ impl<'a> Unpacker<'a> {
                     &mut stdout,
                     &self.current,
                     &self.options.content_output,
-                    size)?;
+                    size,
+                )?;
             }
         }
 
         match self.options.content_output {
             ContentOutput::None => Ok(()),
             ContentOutput::Raw => {
-                io::copy(&mut src, &mut stdout).and_then(move |written|
-                    if written != size {
+                io::copy(&mut src, &mut stdout).and_then(
+                    move |written| if written !=
+                        size
+                    {
                         Err(io::Error::new(
                             io::ErrorKind::UnexpectedEof,
-                            format!("expecting to write {} but wrote {}", size, written)))
+                            format!("expecting to write {} but wrote {}", size, written),
+                        ))
                     } else {
                         Ok(())
-                    })?;
+                    },
+                )?;
                 Ok(())
             }
         }
@@ -214,18 +220,27 @@ impl<'a> Unpacker<'a> {
 }
 
 fn simple_time(dur: time::Duration) -> u64 {
-    dur.as_secs().checked_mul(1_000_000_000)
-        .map_or(0, |nanos| nanos + dur.subsec_nanos() as u64)
+    dur.as_secs().checked_mul(1_000_000_000).map_or(
+        0,
+        |nanos| {
+            nanos + dur.subsec_nanos() as u64
+        },
+    )
 }
 
 fn simple_time_sys(val: time::SystemTime) -> u64 {
-    val.duration_since(time::UNIX_EPOCH).map(simple_time).unwrap_or(0)
+    val.duration_since(time::UNIX_EPOCH)
+        .map(simple_time)
+        .unwrap_or(0)
 }
 
 
 fn simple_time_tm(val: crates_time::Tm) -> u64 {
     let timespec = val.to_timespec();
-    simple_time(time::Duration::new(timespec.sec as u64, timespec.nsec as u32))
+    simple_time(time::Duration::new(
+        timespec.sec as u64,
+        timespec.nsec as u32,
+    ))
 }
 
 fn simple_time_btime(val: &fs::Metadata) -> Result<u64> {
@@ -266,14 +281,14 @@ fn simple_time_ctime(val: &stat::Stat) -> u64 {
 
 impl<'a> Unpacker<'a> {
     fn process_zip<T>(&self, from: T) -> Result<()>
-        where T: io::Read + io::Seek {
-        let mut zip = zip::ZipArchive::new(from)
-            .chain_err(|| "opening zip")?;
+    where
+        T: io::Read + io::Seek,
+    {
+        let mut zip = zip::ZipArchive::new(from).chain_err(|| "opening zip")?;
 
         for i in 0..zip.len() {
             let unpacker = {
-                let entry = zip.by_index(i)
-                    .chain_err(|| format!("opening entry {}", i))?;
+                let entry = zip.by_index(i).chain_err(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
                 unpacker.current.mtime = simple_time_tm(entry.last_modified());
@@ -290,8 +305,9 @@ impl<'a> Unpacker<'a> {
             if self.is_format_error_result(&res)? {
                 let new_entry = zip.by_index(i)?;
                 let size = new_entry.size();
-                unpacker.complete_details(new_entry, size)
-                    .chain_err(|| "..after rollback")?;
+                unpacker.complete_details(new_entry, size).chain_err(
+                    || "..after rollback",
+                )?;
                 continue;
             }
 
@@ -303,47 +319,56 @@ impl<'a> Unpacker<'a> {
     }
 
     fn process_partition<T>(&self, inner: T) -> Result<bool>
-        where T: io::Read + io::Seek {
+    where
+        T: io::Read + io::Seek,
+    {
         let mut failed = false;
         let mut settings = ext4::Options::default();
         settings.checksums = ext4::Checksums::Enabled;
-        let mut fs = ext4::SuperBlock::new_with_options(inner, &settings).chain_err(|| "opening filesystem")?;
+        let mut fs = ext4::SuperBlock::new_with_options(inner, &settings)
+            .chain_err(|| "opening filesystem")?;
         let root = &fs.root().chain_err(|| "loading root")?;
-        fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
-            use ext4::Enhanced::*;
-            match *enhanced {
-                Directory(_) => {}
-                RegularFile => {
-                    let mut unpacker = self.with_path(path);
-                    {
-                        let current = &mut unpacker.current;
-                        let stat: &ext4::Stat = &inode.stat;
-                        current.uid = stat.uid;
-                        current.gid = stat.gid;
-                        current.atime = simple_time_ext4(&stat.atime);
-                        current.mtime = simple_time_ext4(&stat.mtime);
-                        current.ctime = simple_time_ext4(&stat.ctime);
-                        current.btime = match stat.btime.as_ref() {
-                            Some(btime) => simple_time_ext4(btime),
-                            None => 0,
-                        };
+        fs.walk(
+            root,
+            "".to_string(),
+            &mut |fs, path, inode, enhanced| {
+                use ext4::Enhanced::*;
+                match *enhanced {
+                    Directory(_) => {}
+                    RegularFile => {
+                        let mut unpacker = self.with_path(path);
+                        {
+                            let current = &mut unpacker.current;
+                            let stat: &ext4::Stat = &inode.stat;
+                            current.uid = stat.uid;
+                            current.gid = stat.gid;
+                            current.atime = simple_time_ext4(&stat.atime);
+                            current.mtime = simple_time_ext4(&stat.mtime);
+                            current.ctime = simple_time_ext4(&stat.ctime);
+                            current.btime = match stat.btime.as_ref() {
+                                Some(btime) => simple_time_ext4(btime),
+                                None => 0,
+                            };
+                        }
+
+                        // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
+                        let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
+                            .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
+
+                        unpacker.unpack(tee).map_err(|e| {
+                            ext4::Error::with_chain(e, "unpacking")
+                        })?
                     }
-
-                    // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
-                    let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
-                        .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
-
-                    unpacker.unpack(tee)
-                        .map_err(|e| ext4::Error::with_chain(e, "unpacking"))?
+                    _ => {
+                        failed = true;
+                        self.log(1, || {
+                            format!("unimplemented filesystem entry: {} {:?}", path, enhanced)
+                        }).map_err(|e| ext4::Error::with_chain(e, "logging"))?;
+                    }
                 }
-                _ => {
-                    failed = true;
-                    self.log(1, || format!("unimplemented filesystem entry: {} {:?}", path, enhanced))
-                        .map_err(|e| ext4::Error::with_chain(e, "logging"))?;
-                }
-            }
-            Ok(true)
-        })?;
+                Ok(true)
+            },
+        )?;
 
         Ok(false)
     }
@@ -353,45 +378,53 @@ impl<'a> Unpacker<'a> {
         let mut decoder = tar::Archive::new(fd);
         for entry in decoder.entries()? {
             let entry = entry.map_err(tar_err).chain_err(|| "parsing header")?;
-            let mut unpacker = self.with_path(
-                entry.path().map_err(tar_err)?
-                    .to_str().ok_or_else(
-                    || ErrorKind::UnsupportedFeature(format!("invalid path utf-8: {:?}",
-                                                             entry.path_bytes())))?);
+            let mut unpacker =
+                self.with_path(entry.path().map_err(tar_err)?.to_str().ok_or_else(|| {
+                    ErrorKind::UnsupportedFeature(
+                        format!("invalid path utf-8: {:?}", entry.path_bytes()),
+                    )
+                })?);
 
             {
                 let current = &mut unpacker.current;
                 let header = entry.header();
 
-                current.uid = header.uid()
-                    .map_err(tar_err)
-                    .chain_err(|| "reading uid")?;
+                current.uid = header.uid().map_err(tar_err).chain_err(|| "reading uid")?;
 
-                current.gid = header.gid()
-                    .map_err(tar_err)
-                    .chain_err(|| "reading gid")?;
+                current.gid = header.gid().map_err(tar_err).chain_err(|| "reading gid")?;
 
-                current.mtime = simple_time_epoch_seconds(
-                    header.mtime()
-                        .map_err(tar_err)
-                        .chain_err(|| "reading mtime")?);
+                current.mtime =
+                    simple_time_epoch_seconds(header.mtime().map_err(tar_err).chain_err(
+                        || "reading mtime",
+                    )?);
 
-                if let Some(found) = header.username()
-                    .map_err(
-                        |e| ErrorKind::UnsupportedFeature(format!("invalid username utf-8: {} {:?}",
-                                                                  e, header.username_bytes())))? {
+                if let Some(found) = header.username().map_err(|e| {
+                    ErrorKind::UnsupportedFeature(format!(
+                        "invalid username utf-8: {} {:?}",
+                        e,
+                        header.username_bytes()
+                    ))
+                })?
+                {
                     current.user_name = found.to_string();
                 }
-                if let Some(found) = header.groupname()
-                    .map_err(
-                        |e| ErrorKind::UnsupportedFeature(format!("invalid groupname utf-8: {} {:?}",
-                                                                  e, header.groupname_bytes())))? {
+                if let Some(found) = header.groupname().map_err(|e| {
+                    ErrorKind::UnsupportedFeature(format!(
+                        "invalid groupname utf-8: {} {:?}",
+                        e,
+                        header.groupname_bytes()
+                    ))
+                })?
+                {
                     current.group_name = found.to_string();
                 }
             }
 
-            unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)
-                .chain_err(|| format!("processing tar entry: {}", unpacker.current.path.inner()))?;
+            unpacker
+                .unpack(TempFileTee::if_necessary(entry, &unpacker)?)
+                .chain_err(|| {
+                    format!("processing tar entry: {}", unpacker.current.path.inner())
+                })?;
         }
         Ok(())
     }
@@ -399,10 +432,18 @@ impl<'a> Unpacker<'a> {
     fn with_gzip(&self, header: &gzip::Header) -> Result<Unpacker> {
         let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
         let name = match header.filename() {
-            Some(ref c_str) => c_str.to_str().map_err(
-                |not_utf8| io::Error::new(io::ErrorKind::InvalidData,
-                                          format!("gzip member's name must be valid utf-8: {} {:?}",
-                                                  not_utf8, c_str.as_bytes())))?,
+            Some(ref c_str) => {
+                c_str.to_str().map_err(|not_utf8| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "gzip member's name must be valid utf-8: {} {:?}",
+                            not_utf8,
+                            c_str.as_bytes()
+                        ),
+                    )
+                })?
+            }
             None => self.strip_compression_suffix(".gz"),
         };
 
@@ -417,7 +458,9 @@ impl<'a> Unpacker<'a> {
         }
 
         let identity = FileType::identify(fd.fill_buf()?);
-        self.log(2, || format!("identified '{}' as {}", self.current.path.inner(), identity))?;
+        self.log(2, || {
+            format!("identified '{}' as {}", self.current.path.inner(), identity)
+        })?;
         match identity {
             FileType::GZip => {
                 let (attempt, unpacker) = {
@@ -427,13 +470,21 @@ impl<'a> Unpacker<'a> {
                     let unpacker = self.with_gzip(dec.header())?;
 
                     let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
-                    (unpacker.unpack_or_die(&mut failing).chain_err(|| "streaming gzip"), unpacker)
+                    (
+                        unpacker.unpack_or_die(&mut failing).chain_err(
+                            || "streaming gzip",
+                        ),
+                        unpacker,
+                    )
                 };
 
 
                 if self.is_format_error_result(&attempt)? {
                     fd.reset()?;
-                    unpacker.complete(TempFileTee::if_necessary(gzip::Decoder::new(fd)?, &unpacker)?)?;
+                    unpacker.complete(TempFileTee::if_necessary(
+                        gzip::Decoder::new(fd)?,
+                        &unpacker,
+                    )?)?;
                     Ok(())
                 } else {
                     attempt
@@ -457,22 +508,19 @@ impl<'a> Unpacker<'a> {
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
                     let unpacker = self.with_path(entry.header().identifier());
-                    unpacker.unpack(TempFileTee::if_necessary(entry, &unpacker)?)
+                    unpacker
+                        .unpack(TempFileTee::if_necessary(entry, &unpacker)?)
                         .chain_err(|| format!("unpacking deb entry {}", unpacker.current.path))?;
                 }
                 Ok(())
             }
-            FileType::Tar => {
-                self.process_tar(fd)
-                    .chain_err(|| "unpacking tar")
-            }
+            FileType::Tar => self.process_tar(fd).chain_err(|| "unpacking tar"),
             FileType::Zip => {
-                self.process_zip(fd.as_seekable()?)
-                    .chain_err(|| "reading zip file")
+                self.process_zip(fd.as_seekable()?).chain_err(
+                    || "reading zip file",
+                )
             }
-            FileType::Other => {
-                Err(ErrorKind::Rewind.into())
-            }
+            FileType::Other => Err(ErrorKind::Rewind.into()),
             FileType::MBR => {
                 let mut fd = fd.as_seekable()?;
                 let mut failed = false;
@@ -499,7 +547,10 @@ impl<'a> Unpacker<'a> {
 
         if self.is_format_error_result(&attempt)? {
             fd.reset()?;
-            self.complete(TempFileTee::if_necessary(xz2::bufread::XzDecoder::new(fd), self)?)?;
+            self.complete(TempFileTee::if_necessary(
+                xz2::bufread::XzDecoder::new(fd),
+                self,
+            )?)?;
             Ok(())
         } else {
             attempt
@@ -516,7 +567,10 @@ impl<'a> Unpacker<'a> {
 
         if self.is_format_error_result(&attempt)? {
             fd.reset()?;
-            self.complete(TempFileTee::if_necessary(bzip2::read::BzDecoder::new(fd), self)?)?;
+            self.complete(TempFileTee::if_necessary(
+                bzip2::read::BzDecoder::new(fd),
+                self,
+            )?)?;
             Ok(())
         } else {
             attempt
@@ -531,9 +585,14 @@ impl<'a> Unpacker<'a> {
             match specific {
                 FormatErrorType::Other => {
                     let error = res.as_ref().err().unwrap();
-                    self.log(1, || format!(
-                        "thought we could unpack '{}' but we couldn't: {:?} {}",
-                        self.current.path, error, error))?;
+                    self.log(1, || {
+                        format!(
+                            "thought we could unpack '{}' but we couldn't: {:?} {}",
+                            self.current.path,
+                            error,
+                            error
+                        )
+                    })?;
                 }
                 FormatErrorType::Rewind => {}
             }
@@ -545,8 +604,7 @@ impl<'a> Unpacker<'a> {
     }
 
     fn unpack(&self, mut fd: Box<Tee>) -> Result<()> {
-        let res = self.unpack_or_die(&mut fd)
-            .chain_err(|| "unpacking failed");
+        let res = self.unpack_or_die(&mut fd).chain_err(|| "unpacking failed");
 
         if self.is_format_error_result(&res)? {
             self.complete(fd)?;
@@ -564,9 +622,12 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
         let file = fs::File::open(path)?;
 
         let unpacker = Unpacker::from_file(
-            path.to_str()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput,
-                                              format!("non-utf-8 filename found: {:?}", path)))?,
+            path.to_str().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("non-utf-8 filename found: {:?}", path),
+                )
+            })?,
             &file,
             &options,
         )?;
@@ -591,52 +652,58 @@ fn must_fit(x: u64) -> u8 {
 
 fn real_main() -> Result<i32> {
     let matches = App::new("contentin")
-        .arg(Arg::with_name("v")
-            .short("v")
-            .multiple(true)
-            .help("Sets the level of verbosity (more for more)"))
-        .arg(Arg::with_name("headers")
-            .short("h")
-            .long("headers")
-            .possible_values(&[
-                "none",
-                "find",
-                "capnp",
-            ])
-            .default_value("find")
-            .help("What format to write file metadata in")
+        .arg(Arg::with_name("v").short("v").multiple(true).help(
+            "Sets the level of verbosity (more for more)",
+        ))
+        .arg(
+            Arg::with_name("headers")
+                .short("h")
+                .long("headers")
+                .possible_values(&["none", "find", "capnp"])
+                .default_value("find")
+                .help("What format to write file metadata in"),
         )
-        .arg(Arg::with_name("list")
-            .short("t")
-            .long("list")
-            .conflicts_with("to-command")
-            .help("Show headers only, not object content"))
-        .arg(Arg::with_name("no-listing")
-            .short("n")
-            .long("no-listing")
-            .conflicts_with("list")
-            .help("don't print the listing at all"))
-        .arg(Arg::with_name("grep")
-            .short("S")
-            .long("grep")
-            .takes_value(true)
-            .help("search for a string in all files"))
-        .arg(Arg::with_name("max-depth")
-            .short("d")
-            .long("max-depth")
-            .takes_value(true)
-            .use_delimiter(false)
-            .default_value("256")
-            .hide_default_value(true)
-            .validator(|val| match val.parse::<u32>() {
-                Ok(_) => Ok(()),
-                Err(e) => Err(format!("must be valid number: {}", e))
-            })
-            .help("Limit recursion. 1: like unzip. Default: lots"))
-        .arg(Arg::with_name("INPUT")
-            .required(true)
-            .help("File(s) to process")
-            .multiple(true))
+        .arg(
+            Arg::with_name("list")
+                .short("t")
+                .long("list")
+                .conflicts_with("to-command")
+                .help("Show headers only, not object content"),
+        )
+        .arg(
+            Arg::with_name("no-listing")
+                .short("n")
+                .long("no-listing")
+                .conflicts_with("list")
+                .help("don't print the listing at all"),
+        )
+        .arg(
+            Arg::with_name("grep")
+                .short("S")
+                .long("grep")
+                .takes_value(true)
+                .help("search for a string in all files"),
+        )
+        .arg(
+            Arg::with_name("max-depth")
+                .short("d")
+                .long("max-depth")
+                .takes_value(true)
+                .use_delimiter(false)
+                .default_value("256")
+                .hide_default_value(true)
+                .validator(|val| match val.parse::<u32>() {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(format!("must be valid number: {}", e)),
+                })
+                .help("Limit recursion. 1: like unzip. Default: lots"),
+        )
+        .arg(
+            Arg::with_name("INPUT")
+                .required(true)
+                .help("File(s) to process")
+                .multiple(true),
+        )
         .get_matches();
 
     let mut listing_output = ListingOutput::Find;
@@ -667,7 +734,9 @@ fn real_main() -> Result<i32> {
     };
 
     for path in matches.values_of("INPUT").unwrap() {
-        process_real_path(path, &options).chain_err(|| format!("processing: '{}'", path))?;
+        process_real_path(path, &options).chain_err(|| {
+            format!("processing: '{}'", path)
+        })?;
     }
 
     return Ok(0);

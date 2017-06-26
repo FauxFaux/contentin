@@ -15,18 +15,14 @@ use std::ascii::AsciiExt;
 use std::io::Read;
 use std::io::Write;
 
-fn tools() -> (
-    sha2::Sha256,
-    lz4::EncoderBuilder,
-) {
-    (
-        sha2::Sha256::default(),
-        lz4::EncoderBuilder::new(),
-    )
+fn tools() -> (sha2::Sha256, lz4::EncoderBuilder) {
+    (sha2::Sha256::default(), lz4::EncoderBuilder::new())
 }
 
 fn hash_compress_write_from_slice<W>(buf: &[u8], to: W) -> [u8; 256 / 8]
-    where W: Write {
+where
+    W: Write,
+{
     let (mut hasher, lz4) = tools();
     let mut lz4 = lz4.build(to).expect("lz4 writer");
 
@@ -38,8 +34,9 @@ fn hash_compress_write_from_slice<W>(buf: &[u8], to: W) -> [u8; 256 / 8]
 }
 
 fn hash_compress_write_from_reader<R, W>(mut from: R, to: W) -> (u64, [u8; 256 / 8])
-    where W: Write,
-          R: Read
+where
+    W: Write,
+    R: Read,
 {
     let (mut hasher, lz4) = tools();
     let mut lz4 = lz4.build(to).expect("lz4 writer");
@@ -50,7 +47,7 @@ fn hash_compress_write_from_reader<R, W>(mut from: R, to: W) -> (u64, [u8; 256 /
 
         let read = from.read(&mut buf).expect("reading");
         if 0 == read {
-            break
+            break;
         }
 
         total_read += read as u64;
@@ -80,7 +77,8 @@ fn main() {
         let alphabet_chars = "abcdefghijklmnopqrstuvwxyz234567";
         for first in alphabet_chars.chars() {
             for second in alphabet_chars.chars() {
-                fs::create_dir_all(format!("{}/{}{}", out_dir, first, second)).expect("intermediate dir");
+                fs::create_dir_all(format!("{}/{}{}", out_dir, first, second))
+                    .expect("intermediate dir");
             }
         }
     }
@@ -95,8 +93,9 @@ fn main() {
             continue;
         }
 
-        let mut temp = tempfile::NamedTempFileOptions::new().suffix(".tmp").
-            create_in(&out_dir)
+        let mut temp = tempfile::NamedTempFileOptions::new()
+            .suffix(".tmp")
+            .create_in(&out_dir)
             .expect("temp file");
 
         if en.len < 16 * 1024 * 1024 {
@@ -104,13 +103,15 @@ fn main() {
             stdin.read_exact(&mut buf).expect("read");
 
             let out_dir = out_dir.clone();
-            sender.send(move || {
+            sender
+                .send(move || {
 
-                let hash = hash_compress_write_from_slice(&buf, &mut temp);
+                    let hash = hash_compress_write_from_slice(&buf, &mut temp);
 
-                complete(temp, &hash, out_dir.as_str());
+                    complete(temp, &hash, out_dir.as_str());
 
-            }).expect("offloading");
+                })
+                .expect("offloading");
 
         } else {
 
@@ -129,6 +130,11 @@ fn main() {
 fn complete(temp: tempfile::NamedTempFile, hash: &[u8], out_dir: &str) {
     let mut encoded_hash = base32::encode(base32::Alphabet::RFC4648 { padding: false }, hash);
     encoded_hash.make_ascii_lowercase();
-    let written_to = format!("{}/{}/1-{}.lz4", out_dir, &encoded_hash[0..2], &encoded_hash[2..]);
+    let written_to = format!(
+        "{}/{}/1-{}.lz4",
+        out_dir,
+        &encoded_hash[0..2],
+        &encoded_hash[2..]
+    );
     temp.persist(written_to).expect("rename");
 }

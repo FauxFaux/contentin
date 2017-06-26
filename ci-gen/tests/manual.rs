@@ -51,10 +51,7 @@ fn entries(name: &str) -> io::Result<Vec<TestEntry>> {
                 crc = crc::crc32::update(crc, &crc::crc32::CASTAGNOLI_TABLE, &buf[0..found]);
             }
 
-            res.push(TestEntry {
-                crc,
-                entry
-            });
+            res.push(TestEntry { crc, entry });
         }
     }
 
@@ -65,13 +62,13 @@ fn entries(name: &str) -> io::Result<Vec<TestEntry>> {
         let left = &left.entry.paths;
         let right = &right.entry.paths;
         match left.len().cmp(&right.len()) {
-            Ordering::Equal => {},
+            Ordering::Equal => {}
             other => return other,
         };
 
         for i in 0..left.len() {
             match left[i].cmp(&right[i]) {
-                Ordering::Equal => {},
+                Ordering::Equal => {}
                 other => return other,
             }
         }
@@ -89,6 +86,7 @@ struct SimpleTest {
     len: u64,
 }
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 const SIMPLE_EXPECTATIONS: &[SimpleTest] = &[
     SimpleTest { paths: &["a/"], normal_file: false, crc: 0, len: 0 },
     SimpleTest { paths: &["a/b/"], normal_file: false, crc: 0, len: 0 },
@@ -99,7 +97,13 @@ const SIMPLE_EXPECTATIONS: &[SimpleTest] = &[
 
 fn dump(actual: &[TestEntry]) {
     for item in actual {
-        println!("{} {} {} {:?}", item.entry.normal_file, item.entry.len, item.crc, item.entry.paths);
+        println!(
+            "{} {} {} {:?}",
+            item.entry.normal_file,
+            item.entry.len,
+            item.crc,
+            item.entry.paths
+        );
     }
 }
 
@@ -107,13 +111,20 @@ fn check_simple(path: &str, extra_path_component: Option<&str>) {
     let res = entries(path).unwrap();
     if res.len() != SIMPLE_EXPECTATIONS.len() {
         dump(&res);
-        panic!("wrong number of entries: {} should be {}", res.len(), SIMPLE_EXPECTATIONS.len());
+        panic!(
+            "wrong number of entries: {} should be {}",
+            res.len(),
+            SIMPLE_EXPECTATIONS.len()
+        );
     }
 
     for i in 0..SIMPLE_EXPECTATIONS.len() {
         let exp = &SIMPLE_EXPECTATIONS[i];
         let act = &res[i];
-        let mut exp_paths = exp.paths.iter().map(|x| x.to_string()).collect::<Vec<String>>();
+        let mut exp_paths = exp.paths
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>();
         if let Some(component) = extra_path_component {
             exp_paths.push(component.to_string());
         }

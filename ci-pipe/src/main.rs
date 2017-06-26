@@ -12,29 +12,34 @@ use std::io::BufRead;
 use std::io::Read;
 use std::io::Write;
 
-fn with_entries<
-    R: io::Read,
-    F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Result<()>
->(
+fn with_entries<R: io::Read, F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Result<()>>(
     mut from: &mut R,
-    mut work: F
+    mut work: F,
 ) -> bool {
 
     loop {
         match ci_capnp::read_entry(&mut from) {
             Ok(None) => return true,
-            Ok(Some(entry)) => if let Err(e) = work(&mut from, &entry) {
-                let _ = write!(io::stderr(), "fatal: command error while processing '{}': {}\n",
+            Ok(Some(entry)) => {
+                if let Err(e) = work(&mut from, &entry) {
+                    let _ = write!(
+                        io::stderr(),
+                        "fatal: command error while processing '{}': {}\n",
                         join_backwards(&entry.paths, "/ /"),
-                        e);
-                return false;
-            },
-            Err(e) => match e.kind {
-                capnp::ErrorKind::Failed => {
-                    let _ = write!(io::stderr(), "fatal: capnp failure parsing stream: {}\n", e);
+                        e
+                    );
                     return false;
                 }
-                _ => panic!("unexpected capnp error return: {}", e)
+            }
+            Err(e) => {
+                match e.kind {
+                    capnp::ErrorKind::Failed => {
+                        let _ =
+                            write!(io::stderr(), "fatal: capnp failure parsing stream: {}\n", e);
+                        return false;
+                    }
+                    _ => panic!("unexpected capnp error return: {}", e),
+                }
             }
         }
     }
@@ -77,8 +82,10 @@ fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> bool {
         }
 
         if !entry.content_follows {
-            return Err(io::Error::new(io::ErrorKind::UnexpectedEof,
-                                      "Can't do anything for contentless streams"));
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Can't do anything for contentless streams",
+            ));
         }
 
         let mut child = process::Command::new(cmd[0])
@@ -91,7 +98,10 @@ fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> bool {
             .stderr(process::Stdio::inherit())
             .spawn()?;
 
-        assert_eq!(entry.len, copy_upto(&mut from, &mut child.stdin.as_mut().unwrap(), entry.len)?);
+        assert_eq!(
+            entry.len,
+            copy_upto(&mut from, &mut child.stdin.as_mut().unwrap(), entry.len)?
+        );
 
         assert!(child.wait()?.success());
 
@@ -100,7 +110,9 @@ fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> bool {
 }
 
 fn copy_upto<R: ?Sized, W: ?Sized>(reader: &mut R, writer: &mut W, how_much: u64) -> io::Result<u64>
-    where R: io::Read, W: io::Write
+where
+    R: io::Read,
+    W: io::Write,
 {
     let mut buf = [0; 8 * 1024];
     let mut written = 0;
@@ -135,14 +147,14 @@ fn real_main() -> u8 {
 
     match App::new("contentin")
         .setting(clap::AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(SubCommand::with_name("cat")
-        )
-        .subcommand(SubCommand::with_name("grep")
-            .arg(Arg::with_name("pattern")
-                .required(true)
-                .help("pattern to search for"))
-        )
-        .subcommand(SubCommand::with_name("run")
+        .subcommand(SubCommand::with_name("cat"))
+        .subcommand(SubCommand::with_name("grep").arg(
+            Arg::with_name("pattern").required(true).help(
+                "pattern to search for",
+            ),
+        ))
+        .subcommand(
+            SubCommand::with_name("run")
                         .setting(clap::AppSettings::TrailingVarArg)
                         .setting(clap::AppSettings::DontDelimitTrailingValues)
                         .arg(Arg::with_name("sh")
@@ -160,9 +172,10 @@ fn real_main() -> u8 {
                         .arg(Arg::with_name("command")
                             .required(true)
                             .help("Command to run, and its arguments")
-                            .multiple(true))
+                            .multiple(true)),
         )
-        .get_matches().subcommand() {
+        .get_matches()
+        .subcommand() {
         ("cat", Some(_)) => {
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
@@ -189,7 +202,7 @@ fn real_main() -> u8 {
             let as_dumb_line = raw_command.join(" ");
 
             let cmd = if matches.is_present("sh") {
-                vec!("sh", "-c", as_dumb_line.as_str())
+                vec!["sh", "-c", as_dumb_line.as_str()]
             } else {
                 raw_command
             };
@@ -197,7 +210,7 @@ fn real_main() -> u8 {
             if !direct_run(&mut from, &cmd) {
                 return 2;
             }
-        },
+        }
         _ => unreachable!(),
     }
 
