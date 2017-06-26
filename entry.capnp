@@ -1,5 +1,7 @@
 @0xb3afa6ab952b49de;
 
+# NOTE: I am not currently maintaining compatibility on this interface,
+# even though it should be easy to do so.
 struct Entry {
     magic @0 :UInt32;
 
@@ -31,6 +33,7 @@ struct Entry {
         normal      @11 :Void;
         directory   @12 :Void;
         fifo        @13 :Void;
+        socket      @25 :Void;
         softLinkTo  @14 :Text;
         hardLinkTo  @15 :Text;
         charDevice  @16 :DeviceNumbers;

@@ -64,6 +64,22 @@ enum ArchiveReadFailure {
     Read(String),
 }
 
+#[derive(Debug)]
+pub enum ItemType {
+    // TODO: Magic value "Unknown", or an Option, or..?
+    Unknown,
+    RegularFile,
+    Directory,
+    Fifo,
+    Socket,
+    /// A symlink, with its destination.
+    SymbolicLink(String),
+    /// A 'c' device.
+    CharacterDevice { major: u32, minor: u32 },
+    /// A 'b' device.
+    BlockDevice { major: u32, minor: u32 },
+}
+
 pub struct FileDetails {
     path: SList<String>,
     depth: u32,
@@ -76,6 +92,7 @@ pub struct FileDetails {
     user_name: String,
     group_name: String,
     mode: u32,
+    item_type: ItemType,
     failure: Option<ArchiveReadFailure>,
 }
 
@@ -158,6 +175,24 @@ impl<'a> Unpacker<'a> {
 
     fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> Result<Unpacker<'b>> {
         let meta = fd.metadata()?;
+        let item_type = if meta.is_dir() {
+            ItemType::Directory
+        } else if meta.file_type().is_symlink() {
+            match fs::read_link(path)?.to_str() {
+                Some(dest) => ItemType::SymbolicLink(dest.to_string()),
+                None => {
+                    bail!(ErrorKind::UnsupportedFeature(format!(
+                        "{} is a symlink to an invaild utf-8 sequence",
+                        path
+                    )))
+                }
+            }
+        } else if meta.is_file() {
+            ItemType::RegularFile
+        } else {
+            ItemType::Unknown
+        };
+
         let stat = Stat::from(&meta);
         Ok(Unpacker {
             options,
@@ -177,6 +212,7 @@ impl<'a> Unpacker<'a> {
                     .map(|group| group.name().to_string())
                     .unwrap_or(String::new()),
                 mode: stat.mode,
+                item_type,
                 failure: None,
             },
         })
@@ -197,6 +233,7 @@ impl<'a> Unpacker<'a> {
                 user_name: String::new(),
                 group_name: String::new(),
                 mode: 0,
+                item_type: ItemType::Unknown,
                 failure: None,
             },
         }
