@@ -1,6 +1,8 @@
 use std;
 use std::error;
 use std::io;
+
+use ext4;
 use zip;
 
 error_chain! {
@@ -51,6 +53,11 @@ pub fn is_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorType> {
 
         // This is just a copy-paste of is_format_error's Zip(_) => Other
         Some(FormatErrorType::Other)
+    } else if unsafe_staticify(broken_ref).is::<ext4::Error>() {
+        // see zip comment above
+        Some(FormatErrorType::Other)
+    } else if let Some(e) = unsafe_staticify(broken_ref).downcast_ref::<io::Error>() {
+        is_io_format_error(e).unwrap_or(None)
     } else {
 //            self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
         None
@@ -66,24 +73,9 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
             return Some(FormatErrorType::Other);
         }
         ErrorKind::Io(ref e) => {
-            // if there's an actual error code (regardless of what it is),
-            // it's probably not from a library
-            if e.raw_os_error().is_some() {
-                return None;
-            }
-
-            match e.kind() {
-                io::ErrorKind::InvalidData
-                | io::ErrorKind::InvalidInput
-                | io::ErrorKind::Other
-                | io::ErrorKind::UnexpectedEof
-                => return Some(FormatErrorType::Other),
-                io::ErrorKind::BrokenPipe
-                | io::ErrorKind::NotFound
-                | io::ErrorKind::PermissionDenied
-                => return None,
-                _ => {}
-            }
+            if let Some(result) = is_io_format_error(e) {
+                return result;
+             }
         }
 
         ErrorKind::Ext4(_) => {
@@ -97,6 +89,29 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
         ErrorKind::Msg(_) => {
             return None;
         }
+    }
+
+    None
+}
+
+fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
+    // if there's an actual error code (regardless of what it is),
+    // it's probably not from a library
+    if e.raw_os_error().is_some() {
+        return Some(None);
+    }
+
+    match e.kind() {
+        io::ErrorKind::InvalidData
+        | io::ErrorKind::InvalidInput
+        | io::ErrorKind::Other
+        | io::ErrorKind::UnexpectedEof
+        => return Some(Some(FormatErrorType::Other)),
+        io::ErrorKind::BrokenPipe
+        | io::ErrorKind::NotFound
+        | io::ErrorKind::PermissionDenied
+        => return Some(None),
+        _ => {}
     }
 
     None

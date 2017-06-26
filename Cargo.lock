@@ -142,7 +142,7 @@ dependencies = [
  "clap 2.25.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crc 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ext4 0.3.1",
+ "ext4 0.3.0",
  "libflate 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "tar 0.4.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -169,8 +169,8 @@ version = "0.1.0"
 dependencies = [
  "base32 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ci_capnp 0.1.0",
- "lz4 1.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "num_cpus 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lz4 1.21.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "thread-pool 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -227,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "ext4"
-version = "0.3.1"
+version = "0.3.0"
 dependencies = [
  "bitflags 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "lz4"
-version = "1.21.0"
+version = "1.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "gcc 0.3.51 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "num_cpus"
-version = "1.6.0"
+version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.24 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -532,7 +532,7 @@ name = "thread-pool"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "num_cpus 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "two-lock-queue 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -678,14 +678,14 @@ dependencies = [
 "checksum lazy_static 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "3b37545ab726dd833ec6420aaba8231c5b320814b9029ad585555d2a03e94fbf"
 "checksum libc 0.2.24 (registry+https://github.com/rust-lang/crates.io-index)" = "38f5c2b18a287cf78b4097db62e20f43cace381dc76ae5c0a3073067f78b7ddc"
 "checksum libflate 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "a2ee4762e65909ee9a4fbddbd2a4277575c7400d46f533db35202101946a09fe"
-"checksum lz4 1.21.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4231418c8dee2580557953f72606f46084045b6c38d4a04268795e08f7457eea"
+"checksum lz4 1.21.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2f7f1c5ea96c6b31551477a743d75c483a6a039319dd33e4e31c27df24361713"
 "checksum lz4-sys 1.7.5 (registry+https://github.com/rust-lang/crates.io-index)" = "39e8a451abc4169b50dddbc9b34f93ecabd447330d99d27d518a3f8d4e209e9b"
 "checksum lzma-sys 0.1.7 (git+https://github.com/alexcrichton/xz2-rs?rev=7458dd89fd504be344b39db451ca6361b3ac9ae2)" = "<none>"
 "checksum memchr 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1dbccc0e46f1ea47b9f17e6d67c5a96bd27030519c519c9c91327e31275a47b4"
 "checksum miniz-sys 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "28eaee17666671fa872e567547e8428e83308ebe5808cdf6a0e28397dbe2c726"
 "checksum msdos_time 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "65ba9d75bcea84e07812618fedf284a64776c2f2ea0cad6bca7f69739695a958"
 "checksum nodrop 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "52cd74cd09beba596430cc6e3091b74007169a56246e1262f0ba451ea95117b2"
-"checksum num_cpus 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "83df569ffd47dbf87f36bead512632f89e90882b8e7a14286d0471daf6b72de9"
+"checksum num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "aec53c34f2d0247c5ca5d32cca1478762f301740468ee9ee6dcb7a0dd7a0c584"
 "checksum odds 0.2.25 (registry+https://github.com/rust-lang/crates.io-index)" = "c3df9b730298cea3a1c3faa90b7e2f9df3a9c400d0936d6015e6165734eefcba"
 "checksum podio 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "e5422a1ee1bc57cc47ae717b0137314258138f38fd5f3cea083f43a9725383a0"
 "checksum pulldown-cmark 0.0.8 (registry+https://github.com/rust-lang/crates.io-index)" = "1058d7bb927ca067656537eec4e02c2b4b70eaaa129664c5b90c111e20326f41"
