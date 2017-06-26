@@ -1,4 +1,5 @@
 use std;
+use std::error;
 use std::io;
 use zip;
 
@@ -8,8 +9,8 @@ error_chain! {
     }
 
     foreign_links {
-        Io(::std::io::Error);
-        Zip(::zip::result::ZipError);
+        Io(io::Error);
+        Zip(zip::result::ZipError);
     }
 
     errors {
@@ -33,9 +34,9 @@ pub enum FormatErrorType {
     Other,
 }
 
-pub fn is_format_error_result<T>(res: &Result<T>) -> Result<Option<FormatErrorType>> {
+pub fn is_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorType> {
     if res.is_ok() {
-        return Ok(None);
+        return None;
     }
 
     let error = res.as_ref().err().unwrap();
@@ -51,22 +52,20 @@ pub fn is_format_error_result<T>(res: &Result<T>) -> Result<Option<FormatErrorTy
 
     let broken_ref = error.iter().last().unwrap();
 
-    Ok(unsafe {
-        let oh_look_fixed: &'static std::error::Error = std::mem::transmute(broken_ref);
+    let oh_look_fixed = unsafe_staticify(broken_ref);
 
-        if let Some(e) = oh_look_fixed.downcast_ref::<Error>() {
-            is_format_error(e)
-        } else if oh_look_fixed.is::<zip::result::ZipError>() {
-            // Most zip errors should be wrapped in an errors::Error,
-            // but https://github.com/brson/error-chain/issues/159
+    if let Some(e) = oh_look_fixed.downcast_ref::<Error>() {
+        is_format_error(e)
+    } else if oh_look_fixed.is::<zip::result::ZipError>() {
+        // Most zip errors should be wrapped in an errors::Error,
+        // but https://github.com/brson/error-chain/issues/159
 
-            // This is just a copy-paste of is_format_error's Zip(_) => Other
-            Some(FormatErrorType::Other)
-        } else {
+        // This is just a copy-paste of is_format_error's Zip(_) => Other
+        Some(FormatErrorType::Other)
+    } else {
 //            self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
-            None
-        }
-    })
+        None
+    }
 }
 
 fn is_format_error(e: &Error) -> Option<FormatErrorType> {
@@ -112,4 +111,48 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
     }
 
     None
+}
+
+fn unsafe_staticify(err: &error::Error) -> &'static error::Error {
+    unsafe {
+        std::mem::transmute(err)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+    use std::error::Error as Foo;
+    use zip;
+
+    fn simulate_failure(input: bool) -> zip::result::ZipResult<bool> {
+        if !input {
+            Ok(input)
+        } else {
+            Err(zip::result::ZipError::FileNotFound)
+        }
+    }
+
+    #[test]
+    fn chain_syntax_irrelevant() {
+        let literate = simulate_failure(true).chain_err(|| "whoopsie").unwrap_err();
+        let explicit = Error::with_chain(simulate_failure(true).unwrap_err(), "whoopsie");
+
+        match literate.kind() {
+            &ErrorKind::Msg(_) => {},
+            _ => panic!(),
+        };
+        match explicit.kind() {
+            &ErrorKind::Msg(_) => {},
+            _ => panic!(),
+        }
+
+        let lit_cause = explicit.cause().unwrap();
+        assert!(unsafe_staticify(lit_cause).is::<zip::result::ZipError>());
+
+        let exp_cause = explicit.cause().unwrap();
+        assert!(unsafe_staticify(exp_cause).is::<zip::result::ZipError>());
+    }
 }
