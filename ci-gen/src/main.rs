@@ -24,28 +24,18 @@ use clap::{Arg, App};
 
 use libflate::gzip;
 
-mod output_capnp;
-
 mod errors;
-use errors::*;
-
 mod filetype;
-
-use filetype::FileType;
-
+mod output_capnp;
 mod slist;
-
-use slist::SList;
-
+mod stat;
 mod tee;
 
-use tee::*;
-
-mod stat;
-
-use stat::Stat;
-
 use errors::*;
+use filetype::FileType;
+use slist::SList;
+use stat::Stat;
+use tee::*;
 
 // magic:
 use std::io::BufRead;
