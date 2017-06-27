@@ -5,6 +5,7 @@ use std;
 use std::io;
 
 use capnp;
+use peeky_read::PeekyRead;
 
 pub enum Ownership {
     Unknown,
@@ -21,50 +22,6 @@ pub struct FileEntry {
     pub btime: u64,
     pub normal_file: bool,
     pub content_follows: bool,
-}
-
-struct PeekyRead<'a, R: io::Read + 'a> {
-    inner: &'a mut R,
-    peeked: Option<u8>,
-}
-
-impl<'a, R: io::Read + 'a> io::Read for PeekyRead<'a, R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self.peeked {
-            Some(c) => {
-                buf[0] = c;
-                self.peeked = None;
-                Ok(1)
-            }
-            None => self.inner.read(buf),
-        }
-    }
-}
-
-impl<'a, R: io::Read> PeekyRead<'a, R> {
-    fn new(inner: &mut R) -> PeekyRead<R> {
-        PeekyRead {
-            inner,
-            peeked: None,
-        }
-    }
-
-    fn check_eof(&mut self) -> io::Result<bool> {
-        if self.peeked.is_some() {
-            // we have something more to return; read won't return 0 bytes
-            return Ok(false);
-        }
-
-        let mut buf = [0; 1];
-        Ok(match self.inner.read(&mut buf)? {
-            0 => true,
-            1 => {
-                self.peeked = Some(buf[0]);
-                false
-            }
-            _ => unreachable!(),
-        })
-    }
 }
 
 pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<FileEntry>> {

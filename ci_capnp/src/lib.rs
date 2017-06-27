@@ -1,4 +1,5 @@
 extern crate capnp;
+extern crate peeky_read;
 
 mod entry_capnp;
 

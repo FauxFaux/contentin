@@ -6,6 +6,7 @@ build = "build.rs"
 
 [dependencies]
 capnp = "0.8.10"
+peeky-read = "0.1.0"
 
 [build-dependencies]
 capnpc = "0.8.5"
