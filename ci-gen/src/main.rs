@@ -173,10 +173,11 @@ impl<'a> Unpacker<'a> {
         }
     }
 
-    fn from_file<'b>(path: &str, fd: &fs::File, options: &'b Options) -> Result<Unpacker<'b>> {
-        let meta = fd.metadata()?;
+    fn from_file<'b>(path: &str, meta: fs::Metadata, options: &'b Options) -> Result<Unpacker<'b>> {
+        let stat: Stat = Stat::from(&meta);
+
         let item_type = if meta.is_dir() {
-            ItemType::Directory
+            unreachable!()
         } else if meta.file_type().is_symlink() {
             match fs::read_link(path)?.to_str() {
                 Some(dest) => ItemType::SymbolicLink(dest.to_string()),
@@ -190,10 +191,33 @@ impl<'a> Unpacker<'a> {
         } else if meta.is_file() {
             ItemType::RegularFile
         } else {
-            ItemType::Unknown
+            if 0 == stat.mode {
+                // "mode" will be zero on platforms that don't do modes (i.e. Windows).
+                // TODO: detect symlinks (and DEVices) on Windows?
+                ItemType::Unknown
+            } else {
+                // TODO: use libc here, or assume the constants are the same everywhere?
+                let mode_type = (stat.mode >> 12) & 0b1111;
+                match mode_type {
+                    0b0100 => unreachable!(), // S_IFDIR
+                    0b1000 => unreachable!(), // S_IFREG
+                    0b1010 => unreachable!(), // S_IFLNK
+
+                    0b0001 => ItemType::Fifo, // S_IFIFO
+                    0b1100 => ItemType::Socket, // S_IFSOCK
+
+                    0b0010 => panic!("TODO: char device"), // S_IFCHR
+                    0b0110 => panic!("TODO: block device"), // S_IFBLK
+
+                    _ => {
+                        bail!(ErrorKind::UnsupportedFeature(
+                            format!("unrecognised unix mode type {:b}", mode_type),
+                        ))
+                    }
+                }
+            }
         };
 
-        let stat = Stat::from(&meta);
         Ok(Unpacker {
             options,
             current: FileDetails {
@@ -652,7 +676,7 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
     let path = path.as_ref();
 
     if !path.is_dir() {
-        let file = fs::File::open(path)?;
+        let metadata = fs::symlink_metadata(path)?;
 
         let unpacker = Unpacker::from_file(
             path.to_str().ok_or_else(|| {
@@ -661,11 +685,27 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
                     format!("non-utf-8 filename found: {:?}", path),
                 )
             })?,
-            &file,
+            metadata,
             &options,
         )?;
 
-        return unpacker.unpack(Box::new(BufReaderTee::new(file)));
+        return match unpacker.current.item_type {
+            ItemType::Directory => unreachable!(),
+
+            ItemType::SymbolicLink(_) |
+            ItemType::CharacterDevice { major: _, minor: _ } |
+            ItemType::BlockDevice { major: _, minor: _ } |
+            ItemType::Fifo |
+            ItemType::Socket => {
+                // can't actually read from these guys
+                unpacker.complete_details(io::Cursor::new(&[]), 0)
+            }
+
+            ItemType::Unknown | ItemType::RegularFile => {
+                let file = fs::File::open(path)?;
+                unpacker.unpack(Box::new(BufReaderTee::new(file)))
+            }
+        };
     }
 
     for entry in fs::read_dir(path)? {

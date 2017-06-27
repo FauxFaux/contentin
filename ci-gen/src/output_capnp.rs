@@ -52,10 +52,12 @@ pub fn write_capnp<W: io::Write>(
 
             use ItemType::*;
             match current.item_type {
-                Unknown => match size {
-                    0 => type_.set_directory(()),
-                    _ => type_.set_normal(()),
-                },
+                Unknown => {
+                    match size {
+                        0 => type_.set_directory(()),
+                        _ => type_.set_normal(()),
+                    }
+                }
                 RegularFile => type_.set_normal(()),
                 Directory => type_.set_directory(()),
                 Fifo => type_.set_fifo(()),
@@ -65,7 +67,7 @@ pub fn write_capnp<W: io::Write>(
                     let mut dev = type_.borrow().init_char_device();
                     dev.set_major(major);
                     dev.set_minor(minor);
-                },
+                }
                 BlockDevice { major, minor } => {
                     let mut dev = type_.borrow().init_block_device();
                     dev.set_major(major);

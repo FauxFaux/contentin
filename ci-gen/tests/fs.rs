@@ -22,4 +22,7 @@ fn special_files() {
         .expect("mkfifo");
     let output = entries(fifo).expect("entries");
     assert_eq!(1, output.len());
+    let entry = &output[0];
+    assert_eq!(0, entry.entry.len);
+    assert_eq!(false, entry.entry.normal_file);
 }
