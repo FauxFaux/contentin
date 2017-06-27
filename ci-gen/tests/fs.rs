@@ -4,8 +4,6 @@ extern crate tempdir;
 
 use std::process;
 
-use ci_capnp::FileEntry;
-
 mod entries;
 use entries::*;
 
@@ -19,7 +17,8 @@ fn special_files() {
     assert!(process::Command::new("/usr/bin/mkfifo")
         .arg(fifo)
         .status()
-        .expect("mkfifo"));
+        .expect("mkfifo")
+        .success());
     let output = entries(fifo).expect("entries");
     assert_eq!(1, output.len());
     let entry = &output[0];
