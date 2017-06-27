@@ -16,10 +16,10 @@ fn special_files() {
     fifo.push("fifo");
     let fifo = fifo.to_str().expect("utf-8");
 
-    process::Command::new("/usr/bin/mkfifo")
+    assert!(process::Command::new("/usr/bin/mkfifo")
         .arg(fifo)
         .status()
-        .expect("mkfifo");
+        .expect("mkfifo"));
     let output = entries(fifo).expect("entries");
     assert_eq!(1, output.len());
     let entry = &output[0];
