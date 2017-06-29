@@ -390,52 +390,7 @@ impl<'a> Unpacker<'a> {
                 match *enhanced {
                     Directory(_) => {}
                     RegularFile => {
-                        let mut unpacker = self.with_path(path);
-                        {
-                            let current = &mut unpacker.current;
-                            let stat: &ext4::Stat = &inode.stat;
-                            current.uid = stat.uid;
-                            current.gid = stat.gid;
-                            current.atime = simple_time_ext4(&stat.atime);
-                            current.mtime = simple_time_ext4(&stat.mtime);
-                            current.ctime = simple_time_ext4(&stat.ctime);
-                            current.btime = match stat.btime.as_ref() {
-                                Some(btime) => simple_time_ext4(btime),
-                                None => 0,
-                            };
-
-                            current.item_type = match *enhanced {
-                                ext4::Enhanced::RegularFile => ItemType::RegularFile,
-                                ext4::Enhanced::Directory(_) => ItemType::Directory,
-                                ext4::Enhanced::Socket => ItemType::Socket,
-                                ext4::Enhanced::Fifo => ItemType::Fifo,
-                                ext4::Enhanced::SymbolicLink(ref dest) => ItemType::SymbolicLink(
-                                    dest.to_string(),
-                                ),
-                                ext4::Enhanced::CharacterDevice(major, minor) => {
-                                    ItemType::CharacterDevice {
-                                        major: major as u32,
-                                        minor,
-                                    }
-                                }
-                                ext4::Enhanced::BlockDevice(major, minor) => {
-                                    ItemType::BlockDevice {
-                                        major: major as u32,
-                                        minor,
-                                    }
-                                }
-                            };
-
-                            current.mode = stat.file_mode as u32
-                        }
-
-                        // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
-                        let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
-                            .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
-
-                        unpacker.unpack(tee).map_err(|e| {
-                            ext4::Error::with_chain(e, "unpacking")
-                        })?
+                        self.process_regular_inode(fs, inode, enhanced, path)?;
                     }
                     _ => {
                         failed = true;
@@ -451,6 +406,60 @@ impl<'a> Unpacker<'a> {
         Ok(false)
     }
 
+    fn process_regular_inode<T>(
+        &self,
+        fs: &mut ext4::SuperBlock<T>,
+        inode: &ext4::Inode,
+        enhanced: &ext4::Enhanced,
+        path: &str,
+    ) -> Result<()>
+    where
+        T: io::Read + io::Seek,
+    {
+        let mut unpacker = self.with_path(path);
+        {
+            let current = &mut unpacker.current;
+            let stat: &ext4::Stat = &inode.stat;
+            current.uid = stat.uid;
+            current.gid = stat.gid;
+            current.atime = simple_time_ext4(&stat.atime);
+            current.mtime = simple_time_ext4(&stat.mtime);
+            current.ctime = simple_time_ext4(&stat.ctime);
+            current.btime = match stat.btime.as_ref() {
+                Some(btime) => simple_time_ext4(btime),
+                None => 0,
+            };
+
+            current.item_type = match *enhanced {
+                ext4::Enhanced::RegularFile => ItemType::RegularFile,
+                ext4::Enhanced::Directory(_) => ItemType::Directory,
+                ext4::Enhanced::Socket => ItemType::Socket,
+                ext4::Enhanced::Fifo => ItemType::Fifo,
+                ext4::Enhanced::SymbolicLink(ref dest) => ItemType::SymbolicLink(dest.to_string()),
+                ext4::Enhanced::CharacterDevice(major, minor) => {
+                    ItemType::CharacterDevice {
+                        major: major as u32,
+                        minor,
+                    }
+                }
+                ext4::Enhanced::BlockDevice(major, minor) => {
+                    ItemType::BlockDevice {
+                        major: major as u32,
+                        minor,
+                    }
+                }
+            };
+
+            current.mode = stat.file_mode as u32
+        }
+        // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
+        let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
+            .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
+        unpacker.unpack(tee).map_err(|e| {
+            ext4::Error::with_chain(e, "unpacking")
+        })?;
+        Ok(())
+    }
 
     fn process_tar<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
         let mut decoder = tar::Archive::new(fd);
