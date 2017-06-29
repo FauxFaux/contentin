@@ -74,15 +74,24 @@ fn simple_tar() {
 }
 #[test]
 fn simple_tar_bz2() {
-    check_simple("tests/examples/simple.tar.bz2", Some("tests/examples/simple.tar"))
+    check_simple(
+        "tests/examples/simple.tar.bz2",
+        Some("tests/examples/simple.tar"),
+    )
 }
 #[test]
 fn simple_tar_gz() {
-    check_simple("tests/examples/simple.tar.gz", Some("tests/examples/simple.tar"))
+    check_simple(
+        "tests/examples/simple.tar.gz",
+        Some("tests/examples/simple.tar"),
+    )
 }
 #[test]
 fn simple_tar_xz() {
-    check_simple("tests/examples/simple.tar.xz", Some("tests/examples/simple.tar"))
+    check_simple(
+        "tests/examples/simple.tar.xz",
+        Some("tests/examples/simple.tar"),
+    )
 }
 #[test]
 fn simple_zip() {

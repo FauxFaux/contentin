@@ -403,6 +403,29 @@ impl<'a> Unpacker<'a> {
                                 Some(btime) => simple_time_ext4(btime),
                                 None => 0,
                             };
+
+                            current.item_type = match *enhanced {
+                                ext4::Enhanced::RegularFile => ItemType::RegularFile,
+                                ext4::Enhanced::Directory(_) => ItemType::Directory,
+                                ext4::Enhanced::Socket => ItemType::Socket,
+                                ext4::Enhanced::Fifo => ItemType::Fifo,
+                                ext4::Enhanced::SymbolicLink(ref dest) => ItemType::SymbolicLink(
+                                    dest.to_string(),
+                                ),
+                                ext4::Enhanced::CharacterDevice(major, minor) => {
+                                    ItemType::CharacterDevice {
+                                        major: major as u32,
+                                        minor,
+                                    }
+                                }
+                                ext4::Enhanced::BlockDevice(major, minor) => {
+                                    ItemType::BlockDevice {
+                                        major: major as u32,
+                                        minor,
+                                    }
+                                }
+                            };
+
                             current.mode = stat.file_mode as u32
                         }
 
