@@ -1,13 +1,6 @@
 extern crate crc;
 extern crate ci_capnp;
 
-use std::io;
-use std::process;
-
-use std::io::Read;
-
-use ci_capnp::FileEntry;
-
 mod entries;
 use entries::*;
 
@@ -151,4 +144,19 @@ fn byte_flip_zip() {
 #[test]
 fn byte_flip_tar_xz() {
     round_trips("tests/examples/byte_flip.tar.xz");
+}
+
+#[test]
+fn zip_cd_files() {
+    round_trips("tests/real/broken_cd.zip");
+    round_trips("tests/real/incons-cdoffset.zip");
+}
+
+#[test]
+fn all_types_tiny() {
+    let entries = entries("tests/real/all-types-tiny.img").unwrap();
+    assert_eq!(6, entries.len());
+
+    assert_eq!("/empty-file", entries[0].entry.paths[0]);
+    assert_eq!(true, entries[0].entry.normal_file);
 }
