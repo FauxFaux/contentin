@@ -77,29 +77,29 @@ fn round_trips(test_path: &str) {
 
 #[test]
 fn simple_tar() {
-    check_simple("tests/simple.tar", None)
+    check_simple("tests/examples/simple.tar", None)
 }
 #[test]
 fn simple_tar_bz2() {
-    check_simple("tests/simple.tar.bz2", Some("tests/simple.tar"))
+    check_simple("tests/examples/simple.tar.bz2", Some("tests/examples/simple.tar"))
 }
 #[test]
 fn simple_tar_gz() {
-    check_simple("tests/simple.tar.gz", Some("tests/simple.tar"))
+    check_simple("tests/examples/simple.tar.gz", Some("tests/examples/simple.tar"))
 }
 #[test]
 fn simple_tar_xz() {
-    check_simple("tests/simple.tar.xz", Some("tests/simple.tar"))
+    check_simple("tests/examples/simple.tar.xz", Some("tests/examples/simple.tar"))
 }
 #[test]
 fn simple_zip() {
-    check_simple("tests/simple.zip", None)
+    check_simple("tests/examples/simple.zip", None)
 }
 
 /// tar has no error checking, and file data gets corrupted, so we don't detect this.
 #[test]
 fn byte_flip_tar() {
-    let entries = entries("tests/byte_flip.tar").unwrap();
+    let entries = entries("tests/examples/byte_flip.tar").unwrap();
     assert_eq!(2, entries.len());
     // this crc should be correct
     assert_eq!(2806881067, entries[0].crc);
@@ -109,13 +109,13 @@ fn byte_flip_tar() {
 }
 #[test]
 fn byte_flip_tar_bz2() {
-    round_trips("tests/byte_flip.tar.bz2")
+    round_trips("tests/examples/byte_flip.tar.bz2")
 }
 
 /// GZIP detects the failure, but only at the end, so we rollback and output the whole archive again
 #[test]
 fn byte_flip_tar_gz() {
-    let test_path = "tests/byte_flip.tar.gz";
+    let test_path = "tests/examples/byte_flip.tar.gz";
     let entries = entries(test_path).unwrap();
     assert_eq!(3, entries.len());
 
@@ -133,7 +133,7 @@ fn byte_flip_tar_gz() {
 /// ZIP fails exactly like gzip, much to my chagrin.
 #[test]
 fn byte_flip_zip() {
-    let test_path = "tests/byte_flip.zip";
+    let test_path = "tests/examples/byte_flip.zip";
     let entries = entries(test_path).unwrap();
     assert_eq!(3, entries.len());
 
@@ -150,5 +150,5 @@ fn byte_flip_zip() {
 
 #[test]
 fn byte_flip_tar_xz() {
-    round_trips("tests/byte_flip.tar.xz");
+    round_trips("tests/examples/byte_flip.tar.xz");
 }

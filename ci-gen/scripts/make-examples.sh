@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-O=$(readlink -f ../tests/)
+O=$(readlink -f ../tests/examples/)
 
 T=$(mktemp -d)
 (
