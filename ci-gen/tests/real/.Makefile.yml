@@ -1,0 +1,15 @@
+ - paths:
+          - Makefile
+   type:  RegularFile
+   wrap:  Unrecognised
+   data:  true
+   size:  176
+   crc:   e499c9b9
+   atime: 2017-07-01 19:39:58.392352898 UTC
+   mtime: 2017-07-01 19:39:57.648352999 UTC
+   ctime: 2017-07-01 19:39:57.652352999 UTC
+   uid:   1000
+   gid:   1000
+   user:  faux
+   group: faux
+   mode:  0o100644

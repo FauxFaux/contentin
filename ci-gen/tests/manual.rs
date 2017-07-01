@@ -162,12 +162,3 @@ fn zip_cd_files() {
     round_trips("tests/real/broken_cd.zip");
     round_trips("tests/real/incons-cdoffset.zip");
 }
-
-#[test]
-fn all_types_tiny() {
-    let entries = entries("tests/real/all-types-tiny.img").unwrap();
-    assert_eq!(6, entries.len());
-
-    assert_eq!("/empty-file", entries[0].entry.paths[0]);
-    assert_eq!(ItemType::RegularFile, entries[0].entry.item_type);
-}

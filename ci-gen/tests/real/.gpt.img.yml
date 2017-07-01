@@ -1,0 +1,15 @@
+ - paths:
+          - gpt.img
+   type:  RegularFile
+   wrap:  Unrecognised
+   data:  true
+   size:  131072
+   crc:   912b29e4
+   atime: 2017-07-01 18:48:02.012788603 UTC
+   mtime: 2017-06-29 18:09:05.223894896 UTC
+   ctime: 2017-06-29 18:09:05.223894896 UTC
+   uid:   1000
+   gid:   1000
+   user:  faux
+   group: faux
+   mode:  0o100644

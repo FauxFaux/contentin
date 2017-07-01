@@ -1,0 +1,15 @@
+ - paths:
+          - broken_cd.zip
+   type:  RegularFile
+   wrap:  Unrecognised
+   data:  true
+   size:  326
+   crc:   160d8ce0
+   atime: 2017-07-01 15:21:55.422414547 UTC
+   mtime: 2017-06-20 07:12:41.613511021 UTC
+   ctime: 2017-06-29 17:40:49.928900789 UTC
+   uid:   1000
+   gid:   1000
+   user:  faux
+   group: faux
+   mode:  0o100644
