@@ -25,7 +25,7 @@ pub enum Ownership {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ItemType {
     // TODO: Magic value "Unknown", or an Option, or..?
     Unknown,

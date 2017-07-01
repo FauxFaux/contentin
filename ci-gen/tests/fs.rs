@@ -7,6 +7,8 @@ use std::process;
 mod entries;
 use entries::*;
 
+use ci_capnp::ItemType;
+
 #[test]
 fn special_files() {
     let dir = tempdir::TempDir::new("ci-special-files").unwrap();
@@ -25,5 +27,5 @@ fn special_files() {
     assert_eq!(1, output.len());
     let entry = &output[0];
     assert_eq!(0, entry.entry.len);
-    assert_eq!(false, entry.entry.normal_file);
+    assert_eq!(ItemType::Fifo, entry.entry.item_type);
 }

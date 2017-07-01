@@ -4,6 +4,8 @@ extern crate ci_capnp;
 mod entries;
 use entries::*;
 
+use ci_capnp::ItemType;
+
 struct SimpleTest {
     paths: &'static [&'static str],
     normal_file: bool,
@@ -23,8 +25,8 @@ const SIMPLE_EXPECTATIONS: &[SimpleTest] = &[
 fn dump(actual: &[TestEntry]) {
     for item in actual {
         println!(
-            "{} {} {} {:?}",
-            item.entry.normal_file,
+            "{:?} {} {} {:?}",
+            item.entry.item_type,
             item.entry.len,
             item.crc,
             item.entry.paths
@@ -55,7 +57,7 @@ fn check_simple(path: &str, extra_path_component: Option<&str>) {
         }
         exp_paths.push(path.to_string());
         assert_eq!(exp_paths, act.entry.paths);
-        assert_eq!(exp.normal_file, act.entry.normal_file);
+        assert_eq!(exp.normal_file, ItemType::RegularFile == act.entry.item_type);
         assert_eq!(exp.crc, act.crc, "{:08x} != {:08x}", exp.crc, act.crc);
         assert_eq!(exp.len, act.entry.len);
     }
@@ -167,5 +169,5 @@ fn all_types_tiny() {
     assert_eq!(6, entries.len());
 
     assert_eq!("/empty-file", entries[0].entry.paths[0]);
-    assert_eq!(true, entries[0].entry.normal_file);
+    assert_eq!(ItemType::RegularFile, entries[0].entry.item_type);
 }
