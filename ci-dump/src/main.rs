@@ -48,22 +48,18 @@ fn main() {
     }
 
     all.sort_by(|left, right| {
+        use std::cmp::min;
         use std::cmp::Ordering;
         let left = &left.entry.paths;
         let right = &right.entry.paths;
-        match left.len().cmp(&right.len()) {
-            Ordering::Equal => {}
-            other => return other,
-        };
-
-        for i in 0..left.len() {
-            match left[i].cmp(&right[i]) {
+        for i in 1..1 + min(left.len(), right.len()) {
+            match left[left.len() - i].cmp(&right[right.len() - i]) {
                 Ordering::Equal => {}
                 other => return other,
             }
         }
 
-        return Ordering::Equal;
+        left.len().cmp(&right.len())
     });
 
     for item in all {
@@ -100,7 +96,7 @@ fn main() {
                     println!("   group: {}", group.name);
                 }
 
-                println!("   mode:  {:o}", mode);
+                println!("   mode:  0o{:04o}", mode);
             }
         }
 
