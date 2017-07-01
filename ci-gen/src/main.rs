@@ -616,7 +616,11 @@ impl<'a> Unpacker<'a> {
             FileType::DiskImage => {
                 let mut fd = fd.as_seekable()?;
                 let mut failed = false;
-                for partition in bootsector::list_partitions(&mut fd, &bootsector::Options::default())? {
+                for partition in bootsector::list_partitions(
+                    &mut fd,
+                    &bootsector::Options::default(),
+                )?
+                {
                     let inner = bootsector::open_partition(&mut fd, &partition)?;
                     failed |= self.process_partition(inner)?;
                 }

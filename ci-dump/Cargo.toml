@@ -1,0 +1,9 @@
+[package]
+name = "ci-dump"
+version = "0.1.0"
+authors = ["Chris West (Faux) <git@goeswhere.com>"]
+
+[dependencies]
+crc = "1.0.0"
+ci-capnp = { path = "../ci-capnp" }
+chrono = "0.4.0"
