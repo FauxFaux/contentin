@@ -50,7 +50,7 @@ pub fn write_capnp<W: io::Write>(
         {
             let mut type_ = entry.borrow().get_type();
 
-            use ItemType::*;
+            use ci_capnp::ItemType::*;
             match current.item_type {
                 Unknown => {
                     match size {
@@ -63,6 +63,7 @@ pub fn write_capnp<W: io::Write>(
                 Fifo => type_.set_fifo(()),
                 Socket => type_.set_socket(()),
                 SymbolicLink(ref dest) => type_.set_soft_link_to(dest.as_str()),
+                HardLink(ref dest) => type_.set_hard_link_to(dest.as_str()),
                 CharacterDevice { major, minor } => {
                     let mut dev = type_.borrow().init_char_device();
                     dev.set_major(major);

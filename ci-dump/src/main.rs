@@ -73,18 +73,17 @@ fn main() {
             println!("          - {}", path);
         }
 
+        println!("   type:  {:?}", entry.item_type);
+
         if 0 != entry.len {
             println!("   size:  {}", entry.len);
+            println!("   crc:   {:08x}", item.crc);
         }
 
         date("atime", entry.atime);
         date("mtime", entry.mtime);
         date("ctime", entry.ctime);
         date("btime", entry.btime);
-
-        if 0 != entry.len {
-            println!("   crc:   {:08x}", item.crc);
-        }
     }
 }
 

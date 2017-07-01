@@ -22,6 +22,7 @@ use std::path;
 use std::time;
 
 use clap::{Arg, App};
+use ci_capnp::ItemType;
 
 use libflate::gzip;
 
@@ -63,22 +64,6 @@ struct Options {
 enum ArchiveReadFailure {
     Open(String),
     Read(String),
-}
-
-#[derive(Debug)]
-pub enum ItemType {
-    // TODO: Magic value "Unknown", or an Option, or..?
-    Unknown,
-    RegularFile,
-    Directory,
-    Fifo,
-    Socket,
-    /// A symlink, with its destination.
-    SymbolicLink(String),
-    /// A 'c' device.
-    CharacterDevice { major: u32, minor: u32 },
-    /// A 'b' device.
-    BlockDevice { major: u32, minor: u32 },
 }
 
 pub struct FileDetails {
@@ -732,6 +717,7 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
             ItemType::Directory => unreachable!(),
 
             ItemType::SymbolicLink(_) |
+            ItemType::HardLink(_) |
             ItemType::CharacterDevice { major: _, minor: _ } |
             ItemType::BlockDevice { major: _, minor: _ } |
             ItemType::Fifo |
