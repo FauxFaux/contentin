@@ -69,16 +69,7 @@ fn is_probably_disc_image(header: &[u8]) -> bool {
         return false;
     }
 
-    if 0x55 != header[510] || 0xAA != header[511] {
-        return false;
-    }
-
-    use std::io;
-    let cursor = io::Cursor::new(header);
-    match bootsector::list_partitions(cursor, &bootsector::Options::default()) {
-        Err(_) => false,
-        Ok(table) => !table.is_empty(),
-    }
+    0x55 == header[510] && 0xAA == header[511]
 }
 
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
