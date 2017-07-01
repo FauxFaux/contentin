@@ -4,6 +4,8 @@ include!(concat!(env!("OUT_DIR"), "/../entry_capnp.rs"));
 use std;
 use std::io;
 
+use std::collections::HashMap;
+
 use capnp;
 use peeky_read::PeekyRead;
 
@@ -61,6 +63,7 @@ pub struct FileEntry {
     pub item_type: ItemType,
     pub content_follows: bool,
     pub container: Container,
+    pub xattrs: HashMap<String, Vec<u8>>,
 }
 
 pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<FileEntry>> {
@@ -87,6 +90,16 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
 
     for i in 0..entry_paths_len {
         paths.push(entry_paths.get(i)?.to_string());
+    }
+
+    let entry_xattrs = entry.get_xattrs()?;
+    let entry_xattrs_len = entry_xattrs.len();
+
+    let mut xattrs = HashMap::with_capacity(entry_paths_len as usize);
+
+    for i in 0..entry_xattrs_len {
+        let xattr = entry_xattrs.get(i);
+        xattrs.insert(xattr.get_name()?.to_string(), xattr.get_value()?.to_vec());
     }
 
     Ok(Some(FileEntry {
@@ -147,5 +160,6 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
             entry::container::Which::OpenError(msg) => Container::OpenError(msg?.to_string()),
             entry::container::Which::ReadError(msg) => Container::ReadError(msg?.to_string()),
         },
+        xattrs,
     }))
 }

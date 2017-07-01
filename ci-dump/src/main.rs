@@ -74,10 +74,10 @@ fn main() {
         }
 
         println!("   type:  {:?}", entry.item_type);
-        println!("   wrap:  {:?}", entry.container);
-        println!("   data:  {:?}", entry.content_follows);
 
         if 0 != entry.len {
+            println!("   wrap:  {:?}", entry.container);
+            println!("   data:  {:?}", entry.content_follows);
             println!("   size:  {}", entry.len);
             println!("   crc:   {:08x}", item.crc);
         }
@@ -101,6 +101,15 @@ fn main() {
                 }
 
                 println!("   mode:  {:o}", mode);
+            }
+        }
+
+        if !entry.xattrs.is_empty() {
+            println!("   xattrs:");
+            let mut keys: Vec<&String> = entry.xattrs.keys().collect();
+            keys.sort();
+            for key in keys {
+                println!("     {}: {:?}", key, entry.xattrs[key]);
             }
         }
     }
