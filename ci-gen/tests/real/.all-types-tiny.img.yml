@@ -1,36 +1,19 @@
  - paths:
+          - p0
           - all-types-tiny.img
    type:  RegularFile
    wrap:  Unrecognised
    data:  true
-   size:  1048576
-   crc:   76375adf
-   atime: 2017-07-01 15:21:55.414414553 UTC
-   mtime: 2017-06-29 17:44:00.076680902 UTC
-   ctime: 2017-06-29 17:44:00.076680902 UTC
-   uid:   1000
-   gid:   1000
-   user:  faux
-   group: faux
-   mode:  0o100600
- - paths:
-          - /empty-file
-          - all-types-tiny.img
-   type:  RegularFile
-   atime: 2017-06-06 17:10:37 UTC
-   mtime: 2017-06-06 17:10:37 UTC
-   ctime: 2017-06-06 17:10:37 UTC
+   size:  1048064
+   crc:   50e6bfbf
    uid:   0
    gid:   0
-   mode:  0o0644
+   mode:  0o0000
  - paths:
-          - /hardlink-file
+          - /empty-file
+          - p0
           - all-types-tiny.img
    type:  RegularFile
-   wrap:  Unrecognised
-   data:  true
-   size:  10485760
-   crc:   08f2709b
    atime: 2017-06-06 17:10:37 UTC
    mtime: 2017-06-06 17:10:37 UTC
    ctime: 2017-06-06 17:10:37 UTC
@@ -39,6 +22,7 @@
    mode:  0o0644
  - paths:
           - /home/faux/hello.txt
+          - p0
           - all-types-tiny.img
    type:  RegularFile
    wrap:  Unrecognised
@@ -52,27 +36,8 @@
    gid:   1000
    mode:  0o0644
  - paths:
-          - /multiple-xattrs
-          - all-types-tiny.img
-   type:  RegularFile
-   atime: 2017-06-06 17:10:37 UTC
-   mtime: 2017-06-06 17:10:37 UTC
-   ctime: 2017-06-06 17:10:37 UTC
-   uid:   0
-   gid:   0
-   mode:  0o0644
- - paths:
-          - /single-xattr
-          - all-types-tiny.img
-   type:  RegularFile
-   atime: 2017-06-06 17:10:37 UTC
-   mtime: 2017-06-06 17:10:37 UTC
-   ctime: 2017-06-06 17:10:37 UTC
-   uid:   0
-   gid:   0
-   mode:  0o0644
- - paths:
           - /sparse-file
+          - p0
           - all-types-tiny.img
    type:  RegularFile
    wrap:  Unrecognised

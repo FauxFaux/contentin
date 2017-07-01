@@ -41,6 +41,7 @@ use tee::*;
 
 // magic:
 use std::io::BufRead;
+use std::io::Seek;
 use std::io::Write;
 
 enum ListingOutput {
@@ -350,11 +351,10 @@ impl<'a> Unpacker<'a> {
         Ok(())
     }
 
-    fn process_partition<T>(&self, inner: T) -> Result<bool>
+    fn process_partition<T>(&self, inner: T) -> Result<()>
     where
         T: io::Read + io::Seek,
     {
-        let mut failed = false;
         let mut settings = ext4::Options::default();
         settings.checksums = ext4::Checksums::Enabled;
         let mut fs = ext4::SuperBlock::new_with_options(inner, &settings)
@@ -373,17 +373,18 @@ impl<'a> Unpacker<'a> {
                         }
                     }
                     _ => {
-                        failed = true;
                         self.log(1, || {
                             format!("unimplemented filesystem entry: {} {:?}", path, enhanced)
                         }).map_err(|e| ext4::Error::with_chain(e, "logging"))?;
+
+                        bail!("file type");
                     }
                 }
                 Ok(true)
             },
         )?;
 
-        Ok(failed)
+        Ok(())
     }
 
     fn process_regular_inode<T>(
@@ -592,20 +593,30 @@ impl<'a> Unpacker<'a> {
             FileType::Other => Err(ErrorKind::Rewind.into()),
             FileType::DiskImage => {
                 let mut fd = fd.as_seekable()?;
-                let mut failed = false;
                 for partition in bootsector::list_partitions(
                     &mut fd,
                     &bootsector::Options::default(),
                 )?
                 {
-                    let inner = bootsector::open_partition(&mut fd, &partition)?;
-                    failed |= self.process_partition(inner)?;
+                    let unpacker = self.with_path(format!("p{}", partition.id).as_str());
+                    let mut part_reader = bootsector::open_partition(&mut fd, &partition)?;
+
+                    let attempt = {
+                        let mut failing: Box<Tee> = Box::new(FailingTee::new(&mut part_reader));
+                        unpacker.unpack_or_die(&mut failing)
+                    };
+
+                    if self.is_format_error_result(&attempt)? {
+                        part_reader.seek(io::SeekFrom::Start(0))?;
+                        unpacker.complete_details(part_reader, partition.len)?;
+                    } else {
+                        attempt?;
+                    }
                 }
-                if failed {
-                    Err(ErrorKind::Rewind.into())
-                } else {
-                    Ok(())
-                }
+                Ok(())
+            },
+            FileType::Ext4 => {
+                self.process_partition(fd.as_seekable()?)
             }
         }
     }

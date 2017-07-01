@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "bootsector"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -176,7 +176,7 @@ name = "ci-gen"
 version = "0.1.0"
 dependencies = [
  "ar 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "bootsector 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bootsector 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bzip2 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "capnp 0.8.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "capnpc 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -715,7 +715,7 @@ dependencies = [
 "checksum bitflags 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4f67931368edf3a9a51d29886d245f1c3db2f1ef0dcc9e35ff70341b78c10d23"
 "checksum bitflags 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4efd02e230a02e18f92fc2735f44597385ed02ad8f831e7c1c1156ee5e1ab3a5"
 "checksum block-buffer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1339a1042f5d9f295737ad4d9a6ab6bf81c84a933dba110b9200cd6d1448b814"
-"checksum bootsector 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a1fe66bb0ecbf072f7b5d3895c43815e35fd725ff34704867e029472cb4c031f"
+"checksum bootsector 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3cdef00f204669488e47cbe5f91a58ef14f1b585239c1d38bffa0b7345408d4a"
 "checksum byte-tools 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "560c32574a12a89ecd91f5e742165893f86e3ab98d21f8ea548658eb9eef5f40"
 "checksum byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c40977b0ee6b9885c9013cd41d9feffdd22deb3bb4dc3a71d901cc7a77de18c8"
 "checksum bzip2 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "c3eafc42c44e0d827de6b1c131175098fe7fb53b8ce8a47e65cb3ea94688be24"

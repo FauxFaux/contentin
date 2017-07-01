@@ -1,8 +1,6 @@
 use std;
 use std::fmt;
 
-use bootsector;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileType {
     GZip,
@@ -12,6 +10,7 @@ pub enum FileType {
     Xz,
     Deb,
     DiskImage,
+    Ext4,
     Other,
 }
 
@@ -62,16 +61,6 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
-/// As we allow MBR tables, and MBR tables have nearly no magic, no checksums, etc.
-/// there is some risk that we'll try and read total nonsense as an MBR; live with it.
-fn is_probably_disc_image(header: &[u8]) -> bool {
-    if header.len() < 512 + 4 {
-        return false;
-    }
-
-    0x55 == header[510] && 0xAA == header[511]
-}
-
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
 
 impl FileType {
@@ -111,8 +100,12 @@ impl FileType {
             FileType::Xz
         } else if is_probably_tar(header) {
             FileType::Tar
-        } else if is_probably_disc_image(header) {
+        } else if header.len() > 512
+            && 0x55 == header[510] && 0xaa == header[511] {
             FileType::DiskImage
+        } else if header.len() > 2048
+            && 0x53 == header[0x438] && 0xef == header[0x439] {
+            FileType::Ext4
         } else {
             FileType::Other
         }
