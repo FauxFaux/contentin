@@ -1,9 +1,9 @@
 [workspace]
 members = [
+    "ci-capnp",
     "ci-gen",
     "ci-pipe",
     "ci-splay",
-    "ci_capnp",
 ]
 
 [profile.release]

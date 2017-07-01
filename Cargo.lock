@@ -1,10 +1,14 @@
 [root]
-name = "ci_capnp"
+name = "ci-splay"
 version = "0.1.0"
 dependencies = [
- "capnp 0.8.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "capnpc 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "peeky-read 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "base32 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ci-capnp 0.1.0",
+ "lz4 1.21.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha2 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempfile 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thread-pool 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -141,6 +145,15 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "ci-capnp"
+version = "0.1.0"
+dependencies = [
+ "capnp 0.8.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnpc 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "peeky-read 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "ci-gen"
 version = "0.1.0"
 dependencies = [
@@ -149,7 +162,7 @@ dependencies = [
  "bzip2 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "capnp 0.8.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "capnpc 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "ci_capnp 0.1.0",
+ "ci-capnp 0.1.0",
  "clap 2.25.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crc 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -169,23 +182,10 @@ name = "ci-pipe"
 version = "0.1.0"
 dependencies = [
  "capnp 0.8.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "ci_capnp 0.1.0",
+ "ci-capnp 0.1.0",
  "clap 2.25.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "ci-splay"
-version = "0.1.0"
-dependencies = [
- "base32 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ci_capnp 0.1.0",
- "lz4 1.21.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "sha2 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tempfile 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "thread-pool 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

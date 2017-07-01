@@ -1,5 +1,5 @@
 [package]
-name = "ci_capnp"
+name = "ci-capnp"
 version = "0.1.0"
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
 build = "build.rs"

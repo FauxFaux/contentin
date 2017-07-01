@@ -5,7 +5,7 @@ authors = ["Chris West (Faux) <git@goeswhere.com>"]
 
 [dependencies]
 capnp = "0.8.10"
-ci_capnp = { path = "../ci_capnp" }
+ci-capnp = { path = "../ci-capnp" }
 clap = "2.23.3"
 regex = "0.2.2"
 tempfile = "2.1.5"
