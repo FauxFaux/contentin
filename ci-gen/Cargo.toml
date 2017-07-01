@@ -13,6 +13,7 @@ clap = "2.23.3"
 ar = "0.2.0"
 bootsector = "0.1.0"
 bzip2 = "0.3.2"
+ext4 = "0.4.0"
 libflate = "0.1.8"
 tar = "0.4"
 xz2 = { git = "https://github.com/alexcrichton/xz2-rs", rev = "7458dd89fd504be344b39db451ca6361b3ac9ae2" }
@@ -30,6 +31,3 @@ capnpc = "0.8.5"
 [dev-dependencies]
 crc = "1.0.0"
 tempdir = "0.3.5"
-
-[dependencies.ext4]
-path = "../../ext4-rs"
