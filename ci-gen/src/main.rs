@@ -364,21 +364,8 @@ impl<'a> Unpacker<'a> {
             root,
             "".to_string(),
             &mut |fs, path, inode, enhanced| {
-                use ext4::Enhanced::*;
-                match *enhanced {
-                    Directory(_) => {}
-                    RegularFile => {
-                        if let Err(e) = self.process_regular_inode(fs, inode, enhanced, path) {
-                            return Err(ext4::Error::with_chain(e, "reading file"));
-                        }
-                    }
-                    _ => {
-                        self.log(1, || {
-                            format!("unimplemented filesystem entry: {} {:?}", path, enhanced)
-                        }).map_err(|e| ext4::Error::with_chain(e, "logging"))?;
-
-                        bail!("file type");
-                    }
+                if let Err(e) = self.process_regular_inode(fs, inode, enhanced, path) {
+                    return Err(ext4::Error::with_chain(e, "reading file"));
                 }
                 Ok(true)
             },
@@ -433,12 +420,21 @@ impl<'a> Unpacker<'a> {
 
             current.mode = stat.file_mode as u32
         }
-        // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
-        let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
-            .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
-        unpacker.unpack(tee).map_err(|e| {
-            ext4::Error::with_chain(e, "unpacking")
-        })?;
+
+        match unpacker.current.item_type {
+            ItemType::RegularFile => {
+                // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
+                let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
+                    .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
+                unpacker.unpack(tee).map_err(|e| {
+                    ext4::Error::with_chain(e, "unpacking")
+                })?;
+            }
+            _ => {
+                unpacker.complete_details(io::Cursor::new(&[]), 0)?;
+            },
+        };
+
         Ok(())
     }
 

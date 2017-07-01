@@ -1,14 +1,124 @@
  - paths:
+          - 
           - p0
           - all-types-tiny.img
-   type:  RegularFile
-   wrap:  Unrecognised
-   data:  true
-   size:  1048064
-   crc:   50e6bfbf
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
    uid:   0
    gid:   0
-   mode:  0o0000
+   mode:  0o0755
+ - paths:
+          - /a
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /a/deeply
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /a/deeply/nested
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /a/deeply/nested/directory
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /a/multiple
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /a/multiple/entry
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /a/multiple/entry/directory
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /block-device
+          - p0
+          - all-types-tiny.img
+   type:  BlockDevice { major: 7, minor: 6 }
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /char-device
+          - p0
+          - all-types-tiny.img
+   type:  CharacterDevice { major: 1, minor: 3 }
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /empty-directory
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
  - paths:
           - /empty-file
           - p0
@@ -20,6 +130,76 @@
    uid:   0
    gid:   0
    mode:  0o0644
+ - paths:
+          - /extremely-major-device
+          - p0
+          - all-types-tiny.img
+   type:  CharacterDevice { major: 4093, minor: 0 }
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /extremely-minor-device
+          - p0
+          - all-types-tiny.img
+   type:  CharacterDevice { major: 0, minor: 1023997 }
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /fifo-file
+          - p0
+          - all-types-tiny.img
+   type:  Fifo
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /hardlink-file
+          - p0
+          - all-types-tiny.img
+   type:  RegularFile
+   wrap:  Unrecognised
+   data:  true
+   size:  10485760
+   crc:   08f2709b
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /home
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
+ - paths:
+          - /home/faux
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
  - paths:
           - /home/faux/hello.txt
           - p0
@@ -35,6 +215,61 @@
    uid:   1000
    gid:   1000
    mode:  0o0644
+ - paths:
+          - /lost+found
+          - p0
+          - all-types-tiny.img
+   type:  Directory
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0700
+ - paths:
+          - /multiple-xattrs
+          - p0
+          - all-types-tiny.img
+   type:  RegularFile
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /nonsense-symlink-file
+          - p0
+          - all-types-tiny.img
+   type:  SymbolicLink("nonsense")
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0777
+ - paths:
+          - /single-xattr
+          - p0
+          - all-types-tiny.img
+   type:  RegularFile
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0644
+ - paths:
+          - /sock-file
+          - p0
+          - all-types-tiny.img
+   type:  Socket
+   atime: 2017-06-06 17:10:37 UTC
+   mtime: 2017-06-06 17:10:37 UTC
+   ctime: 2017-06-06 17:10:37 UTC
+   uid:   0
+   gid:   0
+   mode:  0o0755
  - paths:
           - /sparse-file
           - p0
