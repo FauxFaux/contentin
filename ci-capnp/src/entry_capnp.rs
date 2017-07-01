@@ -16,7 +16,11 @@ pub struct PosixEntity {
 #[derive(Clone, Debug)]
 pub enum Ownership {
     Unknown,
-    Posix{ user: PosixEntity, group: PosixEntity, mode: u32 },
+    Posix {
+        user: PosixEntity,
+        group: PosixEntity,
+        mode: u32,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +42,14 @@ pub enum ItemType {
 }
 
 #[derive(Clone, Debug)]
+pub enum Container {
+    Unrecognised,
+    Included,
+    OpenError(String),
+    ReadError(String),
+}
+
+#[derive(Clone, Debug)]
 pub struct FileEntry {
     pub len: u64,
     pub paths: Vec<String>,
@@ -48,6 +60,7 @@ pub struct FileEntry {
     pub ownership: Ownership,
     pub item_type: ItemType,
     pub content_follows: bool,
+    pub container: Container,
 }
 
 pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<FileEntry>> {
@@ -99,7 +112,7 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
                     },
                     mode: tuple.get_mode(),
                 }
-            },
+            }
         },
         item_type: match entry.get_type().which()? {
             entry::type_::Which::Normal(()) => ItemType::RegularFile,
@@ -127,6 +140,12 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
         content_follows: match entry.get_content().which()? {
             entry::content::Which::Follows(()) => true,
             _ => false,
+        },
+        container: match entry.get_container().which()? {
+            entry::container::Which::Unrecognised(()) => Container::Unrecognised,
+            entry::container::Which::Included(()) => Container::Included,
+            entry::container::Which::OpenError(msg) => Container::OpenError(msg?.to_string()),
+            entry::container::Which::ReadError(msg) => Container::ReadError(msg?.to_string()),
         },
     }))
 }
