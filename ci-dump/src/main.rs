@@ -73,6 +73,8 @@ fn main() {
             println!("          - {}", path);
         }
 
+        println!("   data:  {:?}", entry.content_follows);
+
         println!("   type:  {:?}", entry.item_type);
 
         if 0 != entry.len {
@@ -84,6 +86,25 @@ fn main() {
         date("mtime", entry.mtime);
         date("ctime", entry.ctime);
         date("btime", entry.btime);
+
+        use ci_capnp::Ownership;
+        match entry.ownership {
+            Ownership::Unknown => {},
+            Ownership::Posix {
+                user, group, mode
+            } => {
+                println!("   uid:   {}", user.id);
+                println!("   gid:   {}", group.id);
+                if !user.name.is_empty() {
+                    println!("   user:  {}", user.name);
+                }
+                if !group.name.is_empty() {
+                    println!("   group: {}", group.name);
+                }
+
+                println!("   mode:  {:o}", mode);
+            }
+        }
     }
 }
 

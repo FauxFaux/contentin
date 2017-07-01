@@ -8,3 +8,5 @@ pub use entry_capnp::entry;
 pub use entry_capnp::FileEntry;
 pub use entry_capnp::read_entry;
 pub use entry_capnp::ItemType;
+pub use entry_capnp::Ownership;
+pub use entry_capnp::PosixEntity;

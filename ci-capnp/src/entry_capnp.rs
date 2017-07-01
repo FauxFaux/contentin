@@ -7,9 +7,16 @@ use std::io;
 use capnp;
 use peeky_read::PeekyRead;
 
+#[derive(Clone, Debug)]
+pub struct PosixEntity {
+    pub id: u32,
+    pub name: String,
+}
+
+#[derive(Clone, Debug)]
 pub enum Ownership {
     Unknown,
-    Posix(String, String),
+    Posix{ user: PosixEntity, group: PosixEntity, mode: u32 },
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +45,7 @@ pub struct FileEntry {
     pub mtime: u64,
     pub ctime: u64,
     pub btime: u64,
+    pub ownership: Ownership,
     pub item_type: ItemType,
     pub content_follows: bool,
 }
@@ -70,11 +78,29 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
 
     Ok(Some(FileEntry {
         len: entry.get_len(),
+        paths,
         atime: entry.get_atime(),
         mtime: entry.get_mtime(),
         ctime: entry.get_ctime(),
         btime: entry.get_btime(),
-        paths,
+        ownership: match entry.get_ownership().which()? {
+            entry::ownership::Which::Unknown(()) => Ownership::Unknown,
+            entry::ownership::Which::Posix(tuple) => {
+                let user = tuple.get_user()?;
+                let group = tuple.get_group()?;
+                Ownership::Posix {
+                    user: PosixEntity {
+                        id: user.get_id(),
+                        name: user.get_name()?.to_string(),
+                    },
+                    group: PosixEntity {
+                        id: group.get_id(),
+                        name: group.get_name()?.to_string(),
+                    },
+                    mode: tuple.get_mode(),
+                }
+            },
+        },
         item_type: match entry.get_type().which()? {
             entry::type_::Which::Normal(()) => ItemType::RegularFile,
             entry::type_::Which::Directory(()) => ItemType::Directory,
