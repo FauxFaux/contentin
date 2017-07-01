@@ -1,4 +1,5 @@
 extern crate ar;
+extern crate bootsector;
 extern crate bzip2;
 extern crate capnp;
 extern crate ci_capnp;
@@ -390,7 +391,9 @@ impl<'a> Unpacker<'a> {
                 match *enhanced {
                     Directory(_) => {}
                     RegularFile => {
-                        self.process_regular_inode(fs, inode, enhanced, path)?;
+                        if let Err(e) = self.process_regular_inode(fs, inode, enhanced, path) {
+                            return Err(ext4::Error::with_chain(e, "reading file"));
+                        }
                     }
                     _ => {
                         failed = true;
@@ -403,7 +406,7 @@ impl<'a> Unpacker<'a> {
             },
         )?;
 
-        Ok(false)
+        Ok(failed)
     }
 
     fn process_regular_inode<T>(
@@ -610,11 +613,11 @@ impl<'a> Unpacker<'a> {
                 )
             }
             FileType::Other => Err(ErrorKind::Rewind.into()),
-            FileType::MBR => {
+            FileType::DiskImage => {
                 let mut fd = fd.as_seekable()?;
                 let mut failed = false;
-                for partition in ext4::mbr::read_partition_table(&mut fd)? {
-                    let inner = ext4::mbr::read_partition(&mut fd, &partition)?;
+                for partition in bootsector::list_partitions(&mut fd, &bootsector::Options::default())? {
+                    let inner = bootsector::open_partition(&mut fd, &partition)?;
                     failed |= self.process_partition(inner)?;
                 }
                 if failed {

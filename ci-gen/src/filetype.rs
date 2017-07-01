@@ -1,7 +1,7 @@
 use std;
 use std::fmt;
 
-use ext4::mbr;
+use bootsector;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileType {
@@ -11,7 +11,7 @@ pub enum FileType {
     BZip2,
     Xz,
     Deb,
-    MBR,
+    DiskImage,
     Other,
 }
 
@@ -62,7 +62,9 @@ fn is_probably_tar(header: &[u8]) -> bool {
     return false;
 }
 
-fn is_probably_mbr(header: &[u8]) -> bool {
+/// As we allow MBR tables, and MBR tables have nearly no magic, no checksums, etc.
+/// there is some risk that we'll try and read total nonsense as an MBR; live with it.
+fn is_probably_disc_image(header: &[u8]) -> bool {
     if header.len() < 512 + 4 {
         return false;
     }
@@ -71,11 +73,9 @@ fn is_probably_mbr(header: &[u8]) -> bool {
         return false;
     }
 
-    if b"EFI"[..] == header[512..515] {
-        return false;
-    }
-
-    match mbr::parse_partition_table(header, 512) {
+    use std::io;
+    let cursor = io::Cursor::new(header);
+    match bootsector::list_partitions(cursor, &bootsector::Options::default()) {
         Err(_) => false,
         Ok(table) => !table.is_empty(),
     }
@@ -120,8 +120,8 @@ impl FileType {
             FileType::Xz
         } else if is_probably_tar(header) {
             FileType::Tar
-        } else if is_probably_mbr(header) {
-            FileType::MBR
+        } else if is_probably_disc_image(header) {
+            FileType::DiskImage
         } else {
             FileType::Other
         }
