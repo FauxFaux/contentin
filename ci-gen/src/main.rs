@@ -142,18 +142,10 @@ impl<'a> Unpacker<'a> {
         match self.options.content_output {
             ContentOutput::None => Ok(()),
             ContentOutput::Raw => {
-                io::copy(&mut src, &mut stdout).and_then(
-                    move |written| if written !=
-                        size
-                    {
-                        Err(io::Error::new(
-                            io::ErrorKind::UnexpectedEof,
-                            format!("expecting to write {} but wrote {}", size, written),
-                        ))
-                    } else {
-                        Ok(())
-                    },
-                )?;
+                let written = io::copy(&mut src, &mut stdout)?;
+                if written != size {
+                    bail!(format!("expecting to write {} but wrote {}", size, written));
+                }
                 Ok(())
             }
         }
