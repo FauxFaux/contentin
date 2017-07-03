@@ -44,16 +44,13 @@ fn is_probably_tar(header: &[u8]) -> bool {
         return false;
     }
 
-    if let Some(checksum) = read_octal(&header[148..156]) {
-        let mut sum: u32 = (b' ' as u32) * 8;
-        for i in 0..148 {
-            sum += header[i] as u32;
-        }
-        for i in 156..512 {
-            sum += header[i] as u32;
-        }
+    if let Some(expected) = read_octal(&header[148..156]) {
+        let found: u32 =
+            header[0..148].into_iter().map(|x| *x as u32).sum::<u32>() +
+            (b' ' as u32) * 8 +
+            header[156..512].into_iter().map(|x| *x as u32).sum::<u32>();
 
-        if checksum == sum {
+        if expected == found {
             return true;
         }
     }
