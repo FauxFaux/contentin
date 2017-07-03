@@ -81,32 +81,41 @@ fn main() {
             println!("          - {}", path);
         }
 
-        println!("   type:  {:?}", entry.item_type);
+        println!("   type:  {:?}", entry.meta.item_type);
 
         if 0 != entry.len {
-            println!("   wrap:  {:?}", entry.container);
+            println!("   wrap:  {:?}", entry.meta.container);
             println!("   data:  {:?}", entry.content_follows);
             println!("   size:  {}", entry.len);
             println!("   crc:   {:08x}", item.crc);
         }
 
         if transients {
-            date("atime", entry.atime);
-            date("mtime", entry.mtime);
-            date("ctime", entry.ctime);
-            date("btime", entry.btime);
+            date("atime", entry.meta.atime);
+            date("mtime", entry.meta.mtime);
+            date("ctime", entry.meta.ctime);
+            date("btime", entry.meta.btime);
 
             use ci_capnp::Ownership;
-            match entry.ownership {
+            match entry.meta.ownership {
                 Ownership::Unknown => {}
                 Ownership::Posix { user, group, mode } => {
-                    println!("   uid:   {}", user.id);
-                    println!("   gid:   {}", group.id);
-                    if !user.name.is_empty() {
-                        println!("   user:  {}", user.name);
+                    if let Some(ref user) = user {
+                        println!("   uid:   {}", user.id);
                     }
-                    if !group.name.is_empty() {
-                        println!("   group: {}", group.name);
+                    if let Some(ref group) = group {
+                        println!("   gid:   {}", group.id);
+                    }
+
+                    if let Some(user) = user {
+                        if !user.name.is_empty() {
+                            println!("   user:  {}", user.name);
+                        }
+                    }
+                    if let Some(group) = group {
+                        if !group.name.is_empty() {
+                            println!("   group: {}", group.name);
+                        }
                     }
 
                     println!("   mode:  0o{:04o}", mode);
@@ -114,12 +123,12 @@ fn main() {
             }
         }
 
-        if !entry.xattrs.is_empty() {
+        if !entry.meta.xattrs.is_empty() {
             println!("   xattrs:");
-            let mut keys: Vec<&String> = entry.xattrs.keys().collect();
+            let mut keys: Vec<&String> = entry.meta.xattrs.keys().collect();
             keys.sort();
             for key in keys {
-                println!("     {}: {:?}", key, entry.xattrs[key]);
+                println!("     {}: {:?}", key, entry.meta.xattrs[key]);
             }
         }
     }

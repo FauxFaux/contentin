@@ -6,9 +6,6 @@
    data:  true
    size:  3072
    crc:   20ad41a3
-   uid:   0
-   gid:   0
-   mode:  0o0000
  - paths:
           - p1
           - gpt.img
@@ -17,6 +14,3 @@
    data:  true
    size:  93696
    crc:   3579ad90
-   uid:   0
-   gid:   0
-   mode:  0o0000

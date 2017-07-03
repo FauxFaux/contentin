@@ -21,8 +21,11 @@ use std::io;
 use std::path;
 use std::time;
 
+use std::collections::HashMap;
+
 use clap::{Arg, App};
 use ci_capnp::ItemType;
+use ci_capnp::Meta;
 
 use libflate::gzip;
 
@@ -69,18 +72,9 @@ enum ArchiveReadFailure {
 
 pub struct FileDetails {
     path: SList<String>,
-    depth: u32,
-    atime: u64,
-    mtime: u64,
-    ctime: u64,
-    btime: u64,
-    uid: u32,
-    gid: u32,
-    user_name: String,
-    group_name: String,
-    mode: u32,
-    item_type: ItemType,
     failure: Option<ArchiveReadFailure>,
+    depth: u32,
+    meta: Meta,
 }
 
 pub struct Unpacker<'a> {
@@ -123,11 +117,11 @@ impl<'a> Unpacker<'a> {
         match self.options.listing_output {
             ListingOutput::None => {}
             ListingOutput::Find => {
-                writeln!(stdout, "{} {} {} {} {} {} {} {} {} {}",
+                writeln!(stdout, "{} {} {} {} {} {}",
                          current_path(),
                          size,
-                         self.current.atime, self.current.mtime, self.current.ctime, self.current.btime,
-                         self.current.uid, self.current.gid, self.current.user_name, self.current.group_name,
+                         self.current.meta.atime, self.current.meta.mtime,
+                         self.current.meta.ctime, self.current.meta.btime,
                 )?;
             }
             ListingOutput::Capnp => {
@@ -197,46 +191,61 @@ impl<'a> Unpacker<'a> {
             }
         };
 
+        let meta = Meta {
+            atime: meta.accessed().map(simple_time_sys)?,
+            mtime: meta.modified().map(simple_time_sys)?,
+            ctime: simple_time_ctime(&stat),
+            btime: simple_time_btime(&meta)?,
+            ownership: ci_capnp::Ownership::Posix {
+                user: Some(ci_capnp::PosixEntity {
+                    id: stat.uid,
+                    name: users::get_user_by_uid(stat.uid)
+                        .map(|user| user.name().to_string())
+                        .unwrap_or(String::new())
+                }),
+                group: Some(ci_capnp::PosixEntity {
+                    id: stat.gid,
+                    name: users::get_group_by_gid(stat.gid)
+                        .map(|group| group.name().to_string())
+                        .unwrap_or(String::new())
+                }),
+                mode: stat.mode
+            },
+            container: ci_capnp::Container::Unrecognised,
+            item_type,
+            xattrs: HashMap::new(),
+
+        };
+
         Ok(Unpacker {
             options,
             current: FileDetails {
                 depth: 0,
                 path: SList::head(path.to_string()),
-                atime: meta.accessed().map(simple_time_sys)?,
-                mtime: meta.modified().map(simple_time_sys)?,
-                ctime: simple_time_ctime(&stat),
-                btime: simple_time_btime(&meta)?,
-                uid: stat.uid,
-                gid: stat.gid,
-                user_name: users::get_user_by_uid(stat.uid)
-                    .map(|user| user.name().to_string())
-                    .unwrap_or(String::new()),
-                group_name: users::get_group_by_gid(stat.gid)
-                    .map(|group| group.name().to_string())
-                    .unwrap_or(String::new()),
-                mode: stat.mode,
-                item_type,
+                meta,
                 failure: None,
             },
         })
     }
 
     fn with_path(&self, path: &str) -> Unpacker {
+        let meta = Meta {
+            atime: 0,
+            mtime: 0,
+            ctime: 0,
+            btime: 0,
+            ownership: ci_capnp::Ownership::Unknown,
+            item_type: ItemType::Unknown,
+            container: ci_capnp::Container::Unrecognised,
+            xattrs: HashMap::new(),
+        };
+
         Unpacker {
             options: self.options,
             current: FileDetails {
                 path: self.current.path.plus(path.to_string()),
                 depth: self.current.depth + 1,
-                atime: 0,
-                mtime: 0,
-                ctime: 0,
-                btime: 0,
-                uid: 0,
-                gid: 0,
-                user_name: String::new(),
-                group_name: String::new(),
-                mode: 0,
-                item_type: ItemType::Unknown,
+                meta,
                 failure: None,
             },
         }
@@ -321,11 +330,19 @@ impl<'a> Unpacker<'a> {
 
         for i in 0..zip.len() {
             let unpacker = {
-                let entry = zip.by_index(i).chain_err(|| format!("opening entry {}", i))?;
+                let entry: zip::read::ZipFile = zip.by_index(i).chain_err(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
-                unpacker.current.mtime = simple_time_tm(entry.last_modified());
-                unpacker.current.mode = entry.unix_mode().unwrap_or(0);
+                unpacker.current.meta.mtime = simple_time_tm(entry.last_modified());
+                unpacker.current.meta.ownership = match entry.unix_mode() {
+                    Some(mode) => ci_capnp::Ownership::Posix {
+                        user: None,
+                        group: None,
+                        mode
+                    },
+                    None => ci_capnp::Ownership::Unknown
+                };
+
                 unpacker
             };
 
@@ -388,17 +405,27 @@ impl<'a> Unpacker<'a> {
         {
             let current = &mut unpacker.current;
             let stat: &ext4::Stat = &inode.stat;
-            current.uid = stat.uid;
-            current.gid = stat.gid;
-            current.atime = simple_time_ext4(&stat.atime);
-            current.mtime = simple_time_ext4(&stat.mtime);
-            current.ctime = simple_time_ext4(&stat.ctime);
-            current.btime = match stat.btime.as_ref() {
+            current.meta.ownership = ci_capnp::Ownership::Posix {
+                user: Some(ci_capnp::PosixEntity {
+                    id: stat.uid,
+                    name: String::new(),
+                }),
+               group: Some(ci_capnp::PosixEntity {
+                    id: stat.gid,
+                    name: String::new(),
+                }),
+                   mode: stat.file_mode as u32,
+            };
+
+            current.meta.atime = simple_time_ext4(&stat.atime);
+            current.meta.mtime = simple_time_ext4(&stat.mtime);
+            current.meta.ctime = simple_time_ext4(&stat.ctime);
+            current.meta.btime = match stat.btime.as_ref() {
                 Some(btime) => simple_time_ext4(btime),
                 None => 0,
             };
 
-            current.item_type = match *enhanced {
+            current.meta.item_type = match *enhanced {
                 ext4::Enhanced::RegularFile => ItemType::RegularFile,
                 ext4::Enhanced::Directory(_) => ItemType::Directory,
                 ext4::Enhanced::Socket => ItemType::Socket,
@@ -417,11 +444,9 @@ impl<'a> Unpacker<'a> {
                     }
                 }
             };
-
-            current.mode = stat.file_mode as u32
         }
 
-        match unpacker.current.item_type {
+        match unpacker.current.meta.item_type {
             ItemType::RegularFile => {
                 // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
                 let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
@@ -453,37 +478,34 @@ impl<'a> Unpacker<'a> {
                 let current = &mut unpacker.current;
                 let header = entry.header();
 
-                current.uid = header.uid().map_err(tar_err).chain_err(|| "reading uid")?;
+                current.meta.ownership = ci_capnp::Ownership::Posix {
+                    user: Some(ci_capnp::PosixEntity {
+                        id: header.uid().map_err(tar_err).chain_err(|| "reading uid")?,
+                        name: header.username().and_then(|x| Ok(x.unwrap_or(""))).map_err(|e| {
+                            ErrorKind::UnsupportedFeature(format!(
+                                "invalid username utf-8: {} {:?}",
+                                e,
+                                header.username_bytes()
+                            ))
+                        })?.to_string()
+                    }),
+                    group: Some(ci_capnp::PosixEntity {
+                        id: header.gid().map_err(tar_err).chain_err(|| "reading gid")?,
+                        name: header.groupname().and_then(|x| Ok(x.unwrap_or(""))).map_err(|e| {
+                            ErrorKind::UnsupportedFeature(format!(
+                                "invalid groupname utf-8: {} {:?}",
+                                e,
+                                header.username_bytes()
+                            ))
+                        })?.to_string(),
+                    }),
+                    mode: header.mode()?
+                };
 
-                current.gid = header.gid().map_err(tar_err).chain_err(|| "reading gid")?;
-
-                current.mtime =
+                current.meta.mtime =
                     simple_time_epoch_seconds(header.mtime().map_err(tar_err).chain_err(
                         || "reading mtime",
                     )?);
-
-                if let Some(found) = header.username().map_err(|e| {
-                    ErrorKind::UnsupportedFeature(format!(
-                        "invalid username utf-8: {} {:?}",
-                        e,
-                        header.username_bytes()
-                    ))
-                })?
-                {
-                    current.user_name = found.to_string();
-                }
-                if let Some(found) = header.groupname().map_err(|e| {
-                    ErrorKind::UnsupportedFeature(format!(
-                        "invalid groupname utf-8: {} {:?}",
-                        e,
-                        header.groupname_bytes()
-                    ))
-                })?
-                {
-                    current.group_name = found.to_string();
-                }
-
-                current.mode = header.mode()?;
             }
 
             unpacker
@@ -514,7 +536,7 @@ impl<'a> Unpacker<'a> {
         };
 
         let mut unpacker = self.with_path(name);
-        unpacker.current.mtime = mtime;
+        unpacker.current.meta.mtime = mtime;
         Ok(unpacker)
     }
 
@@ -712,7 +734,7 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
             options,
         )?;
 
-        return match unpacker.current.item_type {
+        return match unpacker.current.meta.item_type {
             ItemType::Directory => unreachable!(),
 
             ItemType::SymbolicLink(_) |

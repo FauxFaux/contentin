@@ -26,7 +26,7 @@ fn dump(actual: &[TestEntry]) {
     for item in actual {
         println!(
             "{:?} {} {} {:?}",
-            item.entry.item_type,
+            item.entry.meta.item_type,
             item.entry.len,
             item.crc,
             item.entry.paths
@@ -57,7 +57,7 @@ fn check_simple(path: &str, extra_path_component: Option<&str>) {
         }
         exp_paths.push(path.to_string());
         assert_eq!(exp_paths, act.entry.paths);
-        assert_eq!(exp.normal_file, ItemType::RegularFile == act.entry.item_type);
+        assert_eq!(exp.normal_file, ItemType::RegularFile == act.entry.meta.item_type);
         assert_eq!(exp.crc, act.crc, "{:08x} != {:08x}", exp.crc, act.crc);
         assert_eq!(exp.len, act.entry.len);
     }

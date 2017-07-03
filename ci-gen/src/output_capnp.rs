@@ -4,6 +4,7 @@ use std::io;
 
 use capnp;
 use ci_capnp::entry;
+use ci_capnp::Ownership;
 
 pub fn write_capnp<W: io::Write>(
     to: &mut W,
@@ -26,32 +27,42 @@ pub fn write_capnp<W: io::Write>(
             }
         }
 
-        entry.set_atime(current.atime);
-        entry.set_mtime(current.mtime);
-        entry.set_ctime(current.ctime);
-        entry.set_btime(current.btime);
+        entry.set_atime(current.meta.atime);
+        entry.set_mtime(current.meta.mtime);
+        entry.set_ctime(current.meta.ctime);
+        entry.set_btime(current.meta.btime);
 
-        {
-            let mut posix = entry.borrow().get_ownership().init_posix();
-            {
-                let mut user = posix.borrow().init_user();
-                user.set_id(current.uid);
-                user.set_name(current.user_name.as_str());
-            }
-            {
-                let mut group = posix.borrow().init_group();
-                group.set_id(current.gid);
-                group.set_name(current.group_name.as_str());
+        match current.meta.ownership {
+            Ownership::Posix {
+                ref user,
+                ref group,
+                mode
+            } => {
+                let mut posix = entry.borrow().get_ownership().init_posix();
+                if let &Some(ref user) = user {
+                    let mut out = posix.borrow().init_user();
+                    out.set_id(user.id);
+                    out.set_name(user.name.as_str());
+                }
+                if let &Some(ref group) = group {
+                    let mut out = posix.borrow().init_group();
+                    out.set_id(group.id);
+                    out.set_name(group.name.as_str());
+                }
+
+                posix.set_mode(mode);
             }
 
-            posix.set_mode(current.mode);
+            Ownership::Unknown => {
+                entry.borrow().get_ownership().set_unknown(());
+            }
         }
 
         {
             let mut type_ = entry.borrow().get_type();
 
             use ci_capnp::ItemType::*;
-            match current.item_type {
+            match current.meta.item_type {
                 Unknown => {
                     match size {
                         0 => type_.set_directory(()),

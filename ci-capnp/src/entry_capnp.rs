@@ -19,8 +19,8 @@ pub struct PosixEntity {
 pub enum Ownership {
     Unknown,
     Posix {
-        user: PosixEntity,
-        group: PosixEntity,
+        user: Option<PosixEntity>,
+        group: Option<PosixEntity>,
         mode: u32,
     },
 }
@@ -55,13 +55,18 @@ pub enum Container {
 pub struct FileEntry {
     pub len: u64,
     pub paths: Vec<String>,
+    pub content_follows: bool,
+    pub meta: Meta,
+}
+
+#[derive(Clone, Debug)]
+pub struct Meta {
     pub atime: u64,
     pub mtime: u64,
     pub ctime: u64,
     pub btime: u64,
     pub ownership: Ownership,
     pub item_type: ItemType,
-    pub content_follows: bool,
     pub container: Container,
     pub xattrs: HashMap<String, Vec<u8>>,
 }
@@ -101,10 +106,7 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
         let xattr = entry_xattrs.get(i);
         xattrs.insert(xattr.get_name()?.to_string(), xattr.get_value()?.to_vec());
     }
-
-    Ok(Some(FileEntry {
-        len: entry.get_len(),
-        paths,
+    let meta = Meta {
         atime: entry.get_atime(),
         mtime: entry.get_mtime(),
         ctime: entry.get_ctime(),
@@ -115,14 +117,14 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
                 let user = tuple.get_user()?;
                 let group = tuple.get_group()?;
                 Ownership::Posix {
-                    user: PosixEntity {
+                    user: Some(PosixEntity {
                         id: user.get_id(),
                         name: user.get_name()?.to_string(),
-                    },
-                    group: PosixEntity {
+                    }),
+                    group: Some(PosixEntity {
                         id: group.get_id(),
                         name: group.get_name()?.to_string(),
-                    },
+                    }),
                     mode: tuple.get_mode(),
                 }
             }
@@ -150,10 +152,6 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
             }
             // _ => ItemType::Unknown,
         },
-        content_follows: match entry.get_content().which()? {
-            entry::content::Which::Follows(()) => true,
-            _ => false,
-        },
         container: match entry.get_container().which()? {
             entry::container::Which::Unrecognised(()) => Container::Unrecognised,
             entry::container::Which::Included(()) => Container::Included,
@@ -161,5 +159,15 @@ pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<Fil
             entry::container::Which::ReadError(msg) => Container::ReadError(msg?.to_string()),
         },
         xattrs,
+    };
+
+    Ok(Some(FileEntry {
+        len: entry.get_len(),
+        paths,
+        meta,
+        content_follows: match entry.get_content().which()? {
+            entry::content::Which::Follows(()) => true,
+            _ => false,
+        },
     }))
 }

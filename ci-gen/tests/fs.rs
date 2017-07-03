@@ -27,5 +27,5 @@ fn special_files() {
     assert_eq!(1, output.len());
     let entry = &output[0];
     assert_eq!(0, entry.entry.len);
-    assert_eq!(ItemType::Fifo, entry.entry.item_type);
+    assert_eq!(ItemType::Fifo, entry.entry.meta.item_type);
 }

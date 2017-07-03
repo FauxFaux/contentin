@@ -76,7 +76,7 @@ fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> bool {
 fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> bool {
     with_entries(&mut from, move |mut from, entry| {
         // skip others; assuming they're empty
-        match entry.item_type {
+        match entry.meta.item_type {
             ci_capnp::ItemType::RegularFile => {}
             _ => {
                 assert_eq!(0, entry.len);
