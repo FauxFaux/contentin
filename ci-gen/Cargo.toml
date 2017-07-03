@@ -30,4 +30,5 @@ capnpc = "0.8.5"
 
 [dev-dependencies]
 crc = "1.0.0"
+diff = "0.1.10"
 tempdir = "0.3.5"

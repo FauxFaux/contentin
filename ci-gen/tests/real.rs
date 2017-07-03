@@ -1,3 +1,5 @@
+extern crate diff;
+
 use std::fs;
 use std::process;
 
@@ -54,6 +56,25 @@ fn everything() {
             .expect(format!("reference file for {}", name).as_str())
             .read_to_end(&mut old).unwrap();
 
-        assert_eq!(now, old, "{}", name);
+        if now == old {
+            continue;
+        }
+
+        let now = String::from_utf8(now).unwrap();
+        let old = String::from_utf8(old).unwrap();
+
+        for diff in diff::lines(old.as_str(), now.as_str()) {
+            match diff {
+                diff::Result::Left(l) => println!("-{}", l),
+                diff::Result::Both(l, _) => {
+                    // TODO: gross hack
+                    if l.starts_with("        ") || l.starts_with(" - paths:") {
+                        println!(" {}", l)
+                    }
+                },
+                diff::Result::Right(r) => println!("+{}", r),
+            }
+        }
+        panic!("{} failed (see above diff)", name);
     }
 }

@@ -183,6 +183,7 @@ dependencies = [
  "ci-capnp 0.1.0",
  "clap 2.25.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crc 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "diff 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ext4 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libflate 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -238,6 +239,11 @@ dependencies = [
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "diff"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "digest"
@@ -727,6 +733,7 @@ dependencies = [
 "checksum clap 2.25.0 (registry+https://github.com/rust-lang/crates.io-index)" = "867a885995b4184be051b70a592d4d70e32d7a188db6e8dff626af286a962771"
 "checksum crc 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bc1914fae6f18ae347320f0ba5e4fc270e17c037ea621fe41ec7e8adf67d11b0"
 "checksum dbghelp-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "97590ba53bcb8ac28279161ca943a924d1fd4a8fb3fa63302591647c4fc5b850"
+"checksum diff 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)" = "0a515461b6c8c08419850ced27bc29e86166dcdcde8fbe76f8b1f0589bb49472"
 "checksum digest 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ecae1c064e29fcabb6c2e9939e53dc7da72ed90234ae36ebfe03a478742efbd1"
 "checksum error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d9435d864e017c3c6afeac1654189b06cdb491cf2ff73dbf0d73b0f292f42ff8"
 "checksum ext4 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9b3dc73a501be684b722f0e9296ad97196acf01758de0e245fda2622e290e444"
