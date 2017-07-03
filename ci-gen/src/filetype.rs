@@ -58,14 +58,14 @@ fn is_probably_tar(header: &[u8]) -> bool {
         }
     }
 
-    return false;
+    false
 }
 
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
 
 impl FileType {
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    pub fn identify<'a>(header: &[u8]) -> FileType {
+    pub fn identify(header: &[u8]) -> FileType {
         if header.len() >= 20
             && 0x1f == header[0] && 0x8b == header[1] {
             FileType::GZip

@@ -30,11 +30,7 @@ pub fn entries(name: &str) -> io::Result<Vec<TestEntry>> {
 
     {
         let mut out = prog.stdout.as_mut().unwrap();
-        loop {
-            let entry: FileEntry = match ci_capnp::read_entry(&mut out).unwrap() {
-                Some(x) => x,
-                None => break,
-            };
+        while let Some(entry) = ci_capnp::read_entry(&mut out).unwrap() {
 
             assert!(entry.content_follows);
 
@@ -72,7 +68,7 @@ pub fn entries(name: &str) -> io::Result<Vec<TestEntry>> {
             }
         }
 
-        return Ordering::Equal;
+        Ordering::Equal
     });
 
     Ok(res)

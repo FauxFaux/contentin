@@ -127,7 +127,7 @@ fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
 /// TODO: i.e. error.cause() is totally useless
 ///
 /// This allows methods from the `Any` trait to be executed, e.g.
-/// is::<> and downcast_ref::<>. I recommend you run them immediately;
+/// `is::<>` `and downcast_ref::<>`. I recommend you run them immediately;
 /// i.e. don't even put the result of the method into a local.
 fn unsafe_staticify(err: &error::Error) -> &'static error::Error {
     unsafe { std::mem::transmute(err) }

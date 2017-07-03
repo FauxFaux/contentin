@@ -498,7 +498,7 @@ impl<'a> Unpacker<'a> {
     fn with_gzip(&self, header: &gzip::Header) -> Result<Unpacker> {
         let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
         let name = match header.filename() {
-            Some(ref c_str) => {
+            Some(c_str) => {
                 c_str.to_str().map_err(|not_utf8| {
                     io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -709,7 +709,7 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
                 )
             })?,
             metadata,
-            &options,
+            options,
         )?;
 
         return match unpacker.current.item_type {
@@ -717,8 +717,8 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
 
             ItemType::SymbolicLink(_) |
             ItemType::HardLink(_) |
-            ItemType::CharacterDevice { major: _, minor: _ } |
-            ItemType::BlockDevice { major: _, minor: _ } |
+            ItemType::CharacterDevice { .. } |
+            ItemType::BlockDevice { .. } |
             ItemType::Fifo |
             ItemType::Socket => {
                 // can't actually read from these guys
@@ -735,7 +735,7 @@ fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Result
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let path = entry.path();
-        process_real_path(path, &options)?;
+        process_real_path(path, options)?;
     }
     Ok(())
 }
@@ -804,11 +804,11 @@ fn real_main() -> Result<i32> {
         .get_matches();
 
     let mut listing_output = ListingOutput::Find;
-    let mut content_output = ContentOutput::Raw;
-
-    if matches.is_present("list") {
-        content_output = ContentOutput::None;
-    }
+    let content_output = if matches.is_present("list") {
+        ContentOutput::None
+    } else {
+        ContentOutput::Raw
+    };
 
     if matches.is_present("no-listing") {
         listing_output = ListingOutput::None;
@@ -836,7 +836,7 @@ fn real_main() -> Result<i32> {
         })?;
     }
 
-    return Ok(0);
+    Ok(0)
 }
 
 fn tar_err(e: io::Error) -> Error {
