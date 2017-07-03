@@ -11,4 +11,4 @@ clean:
 	$(RM) .*.yml
 
 .%.yml: %
-	$(BIN)/ci-gen -h capnp $^ | $(BIN)/ci-dump > $@
+	$(BIN)/ci-gen -h capnp $^ | $(BIN)/ci-dump --drop-local-fs-details > $@

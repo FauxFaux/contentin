@@ -1,6 +1,7 @@
 extern crate crc;
 extern crate ci_capnp;
 extern crate chrono;
+extern crate clap;
 
 use std::io;
 
@@ -18,6 +19,14 @@ struct WithCrc {
 }
 
 fn main() {
+    let matches = clap::App::new("ci-dump").arg(
+        clap::Arg::with_name("drop-local-fs-details")
+            .long("drop-local-fs-details")
+            .help("drop times, ownership, ... from top-level items (i.e. that vary between machines)")
+    ).get_matches();
+
+    let drop_local_fs_details = matches.is_present("drop-local-fs-details");
+
     let input = io::stdin();
     let mut input = &mut input.lock();
 
@@ -64,6 +73,9 @@ fn main() {
 
     for item in all {
         let entry: FileEntry = item.entry;
+
+        let transients = !(drop_local_fs_details && 1 == entry.paths.len());
+
         println!(" - paths:");
         for path in entry.paths {
             println!("          - {}", path);
@@ -78,25 +90,27 @@ fn main() {
             println!("   crc:   {:08x}", item.crc);
         }
 
-        date("atime", entry.atime);
-        date("mtime", entry.mtime);
-        date("ctime", entry.ctime);
-        date("btime", entry.btime);
+        if transients {
+            date("atime", entry.atime);
+            date("mtime", entry.mtime);
+            date("ctime", entry.ctime);
+            date("btime", entry.btime);
 
-        use ci_capnp::Ownership;
-        match entry.ownership {
-            Ownership::Unknown => {}
-            Ownership::Posix { user, group, mode } => {
-                println!("   uid:   {}", user.id);
-                println!("   gid:   {}", group.id);
-                if !user.name.is_empty() {
-                    println!("   user:  {}", user.name);
-                }
-                if !group.name.is_empty() {
-                    println!("   group: {}", group.name);
-                }
+            use ci_capnp::Ownership;
+            match entry.ownership {
+                Ownership::Unknown => {}
+                Ownership::Posix { user, group, mode } => {
+                    println!("   uid:   {}", user.id);
+                    println!("   gid:   {}", group.id);
+                    if !user.name.is_empty() {
+                        println!("   user:  {}", user.name);
+                    }
+                    if !group.name.is_empty() {
+                        println!("   group: {}", group.name);
+                    }
 
-                println!("   mode:  0o{:04o}", mode);
+                    println!("   mode:  0o{:04o}", mode);
+                }
             }
         }
 

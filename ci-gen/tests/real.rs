@@ -29,6 +29,7 @@ fn run(name: &str) -> Vec<u8> {
         .spawn().expect("gen started");
 
     let dump = process::Command::new(path_of("ci-dump"))
+        .arg("--drop-local-fs-details")
         .stdin(gen.stdout.take().unwrap())
         .stdout(process::Stdio::piped())
         .stderr(process::Stdio::inherit())

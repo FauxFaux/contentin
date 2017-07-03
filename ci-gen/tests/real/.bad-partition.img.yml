@@ -5,11 +5,3 @@
    data:  true
    size:  8192
    crc:   90444623
-   atime: 2017-07-01 19:34:04.632391427 UTC
-   mtime: 2017-06-29 18:03:36.728059822 UTC
-   ctime: 2017-06-29 18:03:36.728059822 UTC
-   uid:   1000
-   gid:   1000
-   user:  faux
-   group: faux
-   mode:  0o100644
