@@ -3,7 +3,7 @@ use std::io;
 
 use tempfile::tempfile;
 
-use Unpacker;
+use unpacker::Unpacker;
 
 use errors::*;
 
