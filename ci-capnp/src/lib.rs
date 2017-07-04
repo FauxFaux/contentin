@@ -5,10 +5,12 @@ use std::collections::HashMap;
 
 mod entry_capnp;
 mod read;
+mod write;
 
 /// The actual generated module for `Entry`:
 pub use entry_capnp::entry;
 pub use read::read_entry;
+pub use write::write_meta;
 
 #[derive(Clone, Debug)]
 pub struct PosixEntity {
