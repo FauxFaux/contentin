@@ -345,12 +345,23 @@ impl<'a> Unpacker<'a> {
         let mut decoder = tar::Archive::new(fd);
         for entry in decoder.entries()? {
             let entry = entry.map_err(tar_err).chain_err(|| "parsing header")?;
-            let mut unpacker =
-                self.with_path(entry.path().map_err(tar_err)?.to_str().ok_or_else(|| {
+
+            let mut unpacker = {
+                let path = entry.path().map_err(tar_err)?;
+                let path = path.to_str().ok_or_else(|| {
                     ErrorKind::UnsupportedFeature(
                         format!("invalid path utf-8: {:?}", entry.path_bytes()),
                     )
-                })?);
+                })?;
+
+                if "pax_global_header" == path {
+                    // TODO: maybe expose this data?
+                    // Just ignoring the entry is more consistent with "tar xf".
+                    continue;
+                }
+
+                self.with_path(path)
+            };
 
             {
                 let current = &mut unpacker.current;
