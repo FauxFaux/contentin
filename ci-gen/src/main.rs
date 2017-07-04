@@ -42,7 +42,7 @@ enum ArchiveReadFailure {
     Read(String),
 }
 
-pub struct FileDetails {
+pub struct EntryBuilder {
     path: slist::SList<String>,
     failure: Option<ArchiveReadFailure>,
     depth: u32,

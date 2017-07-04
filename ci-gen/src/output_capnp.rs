@@ -8,7 +8,7 @@ use ci_capnp::Ownership;
 
 pub fn write_capnp<W: io::Write>(
     to: &mut W,
-    current: &::FileDetails,
+    current: &::EntryBuilder,
     content_output: bool,
     size: u64,
 ) -> io::Result<()> {

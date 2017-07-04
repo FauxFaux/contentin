@@ -28,7 +28,7 @@ use std::io::Write;
 
 pub struct Unpacker<'a> {
     options: &'a Options,
-    current: ::FileDetails,
+    current: ::EntryBuilder,
 }
 
 impl<'a> Unpacker<'a> {
@@ -153,7 +153,7 @@ impl<'a> Unpacker<'a> {
 
         Ok(Unpacker {
             options,
-            current: ::FileDetails {
+            current: ::EntryBuilder {
                 depth: 0,
                 path: SList::head(path.to_string()),
                 meta,
@@ -176,7 +176,7 @@ impl<'a> Unpacker<'a> {
 
         Unpacker {
             options: self.options,
-            current: ::FileDetails {
+            current: ::EntryBuilder {
                 path: self.current.path.plus(path.to_string()),
                 depth: self.current.depth + 1,
                 meta,
