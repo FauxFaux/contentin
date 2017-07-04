@@ -36,7 +36,7 @@ pub fn write_capnp<W: io::Write>(
             Ownership::Posix {
                 ref user,
                 ref group,
-                mode
+                mode,
             } => {
                 let mut posix = entry.borrow().get_ownership().init_posix();
                 if let &Some(ref user) = user {

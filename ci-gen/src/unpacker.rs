@@ -36,8 +36,8 @@ pub struct Unpacker<'a> {
 impl<'a> Unpacker<'a> {
     // TODO: shouldn't be pub
     pub fn log<T: fmt::Display, F>(&self, level: u8, msg: F) -> Result<()>
-        where
-            F: FnOnce() -> T,
+    where
+        F: FnOnce() -> T,
     {
         if self.options.verbose < level {
             return Ok(());
@@ -156,20 +156,19 @@ impl<'a> Unpacker<'a> {
                     id: stat.uid,
                     name: users::get_user_by_uid(stat.uid)
                         .map(|user| user.name().to_string())
-                        .unwrap_or(String::new())
+                        .unwrap_or(String::new()),
                 }),
                 group: Some(ci_capnp::PosixEntity {
                     id: stat.gid,
                     name: users::get_group_by_gid(stat.gid)
                         .map(|group| group.name().to_string())
-                        .unwrap_or(String::new())
+                        .unwrap_or(String::new()),
                 }),
-                mode: stat.mode
+                mode: stat.mode,
             },
             container: ci_capnp::Container::Unrecognised,
             item_type,
             xattrs: HashMap::new(),
-
         };
 
         Ok(Unpacker {
@@ -216,15 +215,16 @@ impl<'a> Unpacker<'a> {
     }
 
     fn process_zip<T>(&self, from: T) -> Result<()>
-        where
-            T: io::Read + io::Seek,
+    where
+        T: io::Read + io::Seek,
     {
         use zip;
         let mut zip = zip::ZipArchive::new(from).chain_err(|| "opening zip")?;
 
         for i in 0..zip.len() {
             let unpacker = {
-                let entry: zip::read::ZipFile = zip.by_index(i).chain_err(|| format!("opening entry {}", i))?;
+                let entry: zip::read::ZipFile =
+                    zip.by_index(i).chain_err(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
                 unpacker.current.meta.mtime = simple_time_tm(entry.last_modified());
@@ -232,9 +232,9 @@ impl<'a> Unpacker<'a> {
                     Some(mode) => ci_capnp::Ownership::Posix {
                         user: None,
                         group: None,
-                        mode
+                        mode,
                     },
-                    None => ci_capnp::Ownership::Unknown
+                    None => ci_capnp::Ownership::Unknown,
                 };
 
                 unpacker
@@ -263,8 +263,8 @@ impl<'a> Unpacker<'a> {
     }
 
     fn process_partition<T>(&self, inner: T) -> Result<()>
-        where
-            T: io::Read + io::Seek,
+    where
+        T: io::Read + io::Seek,
     {
         let mut settings = ext4::Options::default();
         settings.checksums = ext4::Checksums::Enabled;
@@ -292,8 +292,8 @@ impl<'a> Unpacker<'a> {
         enhanced: &ext4::Enhanced,
         path: &str,
     ) -> Result<()>
-        where
-            T: io::Read + io::Seek,
+    where
+        T: io::Read + io::Seek,
     {
         let mut unpacker = self.with_path(path);
         {
@@ -351,7 +351,7 @@ impl<'a> Unpacker<'a> {
             }
             _ => {
                 unpacker.complete_details(io::Cursor::new(&[]), 0)?;
-            },
+            }
         };
 
         Ok(())
@@ -376,25 +376,33 @@ impl<'a> Unpacker<'a> {
                 current.meta.ownership = ci_capnp::Ownership::Posix {
                     user: Some(ci_capnp::PosixEntity {
                         id: header.uid().map_err(tar_err).chain_err(|| "reading uid")?,
-                        name: header.username().and_then(|x| Ok(x.unwrap_or(""))).map_err(|e| {
-                            ErrorKind::UnsupportedFeature(format!(
-                                "invalid username utf-8: {} {:?}",
-                                e,
-                                header.username_bytes()
-                            ))
-                        })?.to_string()
+                        name: header
+                            .username()
+                            .and_then(|x| Ok(x.unwrap_or("")))
+                            .map_err(|e| {
+                                ErrorKind::UnsupportedFeature(format!(
+                                    "invalid username utf-8: {} {:?}",
+                                    e,
+                                    header.username_bytes()
+                                ))
+                            })?
+                            .to_string(),
                     }),
                     group: Some(ci_capnp::PosixEntity {
                         id: header.gid().map_err(tar_err).chain_err(|| "reading gid")?,
-                        name: header.groupname().and_then(|x| Ok(x.unwrap_or(""))).map_err(|e| {
-                            ErrorKind::UnsupportedFeature(format!(
-                                "invalid groupname utf-8: {} {:?}",
-                                e,
-                                header.username_bytes()
-                            ))
-                        })?.to_string(),
+                        name: header
+                            .groupname()
+                            .and_then(|x| Ok(x.unwrap_or("")))
+                            .map_err(|e| {
+                                ErrorKind::UnsupportedFeature(format!(
+                                    "invalid groupname utf-8: {} {:?}",
+                                    e,
+                                    header.username_bytes()
+                                ))
+                            })?
+                            .to_string(),
                     }),
-                    mode: header.mode()?
+                    mode: header.mode()?,
                 };
 
                 current.meta.mtime =
@@ -512,27 +520,25 @@ impl<'a> Unpacker<'a> {
                     &mut fd,
                     &bootsector::Options::default(),
                 )?
-                    {
-                        let unpacker = self.with_path(format!("p{}", partition.id).as_str());
-                        let mut part_reader = bootsector::open_partition(&mut fd, &partition)?;
+                {
+                    let unpacker = self.with_path(format!("p{}", partition.id).as_str());
+                    let mut part_reader = bootsector::open_partition(&mut fd, &partition)?;
 
-                        let attempt = {
-                            let mut failing: Box<Tee> = Box::new(FailingTee::new(&mut part_reader));
-                            unpacker.unpack_or_die(&mut failing)
-                        };
+                    let attempt = {
+                        let mut failing: Box<Tee> = Box::new(FailingTee::new(&mut part_reader));
+                        unpacker.unpack_or_die(&mut failing)
+                    };
 
-                        if self.is_format_error_result(&attempt)? {
-                            part_reader.seek(io::SeekFrom::Start(0))?;
-                            unpacker.complete_details(part_reader, partition.len)?;
-                        } else {
-                            attempt?;
-                        }
+                    if self.is_format_error_result(&attempt)? {
+                        part_reader.seek(io::SeekFrom::Start(0))?;
+                        unpacker.complete_details(part_reader, partition.len)?;
+                    } else {
+                        attempt?;
                     }
+                }
                 Ok(())
-            },
-            FileType::Ext4 => {
-                self.process_partition(fd.as_seekable()?)
             }
+            FileType::Ext4 => self.process_partition(fd.as_seekable()?),
         }
     }
 
