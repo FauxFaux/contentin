@@ -1,3 +1,5 @@
+use std;
+
 use entry;
 use Ownership;
 
@@ -59,6 +61,18 @@ pub fn write_meta(meta: &::Meta, entry: &mut entry::Builder, size: u64) {
                 dev.set_major(major);
                 dev.set_minor(minor);
             }
+        }
+    }
+
+    {
+        assert!(meta.xattrs.len() <= std::u32::MAX as usize);
+        let mut xattrs = entry.borrow().init_xattrs(meta.xattrs.len() as u32);
+        let mut names: Vec<&String> = meta.xattrs.keys().collect();
+        names.sort();
+        for (i, name) in names.into_iter().enumerate() {
+            let mut row = xattrs.borrow().get(i as u32);
+            row.set_name(name);
+            row.set_value(&meta.xattrs[name]);
         }
     }
 }

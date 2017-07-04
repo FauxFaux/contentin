@@ -148,6 +148,7 @@ impl<'a> Unpacker<'a> {
             },
             container: ci_capnp::Container::Unrecognised,
             item_type,
+            // TODO: extract xattrs?
             xattrs: HashMap::new(),
         };
 
@@ -318,6 +319,8 @@ impl<'a> Unpacker<'a> {
                     }
                 }
             };
+
+            current.meta.xattrs = inode.stat.xattrs.clone();
         }
 
         match unpacker.current.meta.item_type {
