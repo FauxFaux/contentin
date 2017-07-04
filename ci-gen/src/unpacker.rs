@@ -14,8 +14,6 @@ use tee::*;
 use simple_time::*;
 
 use Options;
-use ContentOutput;
-use ListingOutput;
 
 use ci_capnp;
 use ci_capnp::ItemType;
@@ -64,38 +62,20 @@ impl<'a> Unpacker<'a> {
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
 
-        let current_path = || self.current.path.to_vec().join(" / ");
+        output_capnp::write_capnp(
+            &mut stdout,
+            &self.current,
+            self.options.content_output,
+            size,
+        )?;
 
-        match self.options.listing_output {
-            ListingOutput::None => {}
-            ListingOutput::Find => {
-                writeln!(stdout, "{} {} {} {} {} {}",
-                         current_path(),
-                         size,
-                         self.current.meta.atime, self.current.meta.mtime,
-                         self.current.meta.ctime, self.current.meta.btime,
-                )?;
-            }
-            ListingOutput::Capnp => {
-                output_capnp::write_capnp(
-                    &mut stdout,
-                    &self.current,
-                    &self.options.content_output,
-                    size,
-                )?;
+        if self.options.content_output {
+            let written = io::copy(&mut src, &mut stdout)?;
+            if written != size {
+                bail!(format!("expecting to write {} but wrote {}", size, written));
             }
         }
-
-        match self.options.content_output {
-            ContentOutput::None => Ok(()),
-            ContentOutput::Raw => {
-                let written = io::copy(&mut src, &mut stdout)?;
-                if written != size {
-                    bail!(format!("expecting to write {} but wrote {}", size, written));
-                }
-                Ok(())
-            }
-        }
+        Ok(())
     }
 
     fn from_file<'b>(path: &str, meta: fs::Metadata, options: &'b Options) -> Result<Unpacker<'b>> {

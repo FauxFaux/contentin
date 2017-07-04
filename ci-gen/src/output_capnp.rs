@@ -9,7 +9,7 @@ use ci_capnp::Ownership;
 pub fn write_capnp<W: io::Write>(
     to: &mut W,
     current: &::FileDetails,
-    content_output: &::ContentOutput,
+    content_output: bool,
     size: u64,
 ) -> io::Result<()> {
 
@@ -90,13 +90,10 @@ pub fn write_capnp<W: io::Write>(
 
         {
             let mut content = entry.borrow().get_content();
-            match *content_output {
-                ::ContentOutput::None => {
-                    content.set_absent(());
-                }
-                ::ContentOutput::Raw => {
-                    content.set_follows(());
-                }
+            if content_output {
+                content.set_follows(());
+            } else {
+                content.set_absent(());
             }
         }
     }

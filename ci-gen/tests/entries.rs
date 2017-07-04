@@ -18,8 +18,6 @@ pub struct TestEntry {
 
 pub fn entries(name: &str) -> io::Result<Vec<TestEntry>> {
     let mut prog = process::Command::new(PROG)
-        .arg("-h")
-        .arg("capnp")
         .arg(name)
         .stdin(process::Stdio::null())
         .stdout(process::Stdio::piped())

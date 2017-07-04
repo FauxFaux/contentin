@@ -31,20 +31,8 @@ mod unpacker;
 
 use errors::*;
 
-enum ListingOutput {
-    None,
-    Capnp,
-    Find,
-}
-
-pub enum ContentOutput {
-    None,
-    Raw,
-}
-
 pub struct Options {
-    listing_output: ListingOutput,
-    content_output: ContentOutput,
+    content_output: bool,
     max_depth: u32,
     verbose: u8,
 }
@@ -70,37 +58,18 @@ fn must_fit(x: u64) -> u8 {
 
 fn real_main() -> Result<i32> {
     let matches = App::new("contentin")
-        .arg(Arg::with_name("v").short("v").multiple(true).help(
+        .arg(Arg::with_name("verbose").short("v").multiple(true).help(
             "Sets the level of verbosity (more for more)",
         ))
-        .arg(
-            Arg::with_name("headers")
-                .short("h")
-                .long("headers")
-                .possible_values(&["none", "find", "capnp"])
-                .default_value("find")
-                .help("What format to write file metadata in"),
-        )
+        .arg(Arg::with_name("quiet").short("q").multiple(true).help(
+            "Reduce the level of verbosity",
+        ))
         .arg(
             Arg::with_name("list")
                 .short("t")
                 .long("list")
                 .conflicts_with("to-command")
                 .help("Show headers only, not object content"),
-        )
-        .arg(
-            Arg::with_name("no-listing")
-                .short("n")
-                .long("no-listing")
-                .conflicts_with("list")
-                .help("don't print the listing at all"),
-        )
-        .arg(
-            Arg::with_name("grep")
-                .short("S")
-                .long("grep")
-                .takes_value(true)
-                .help("search for a string in all files"),
         )
         .arg(
             Arg::with_name("max-depth")
@@ -124,31 +93,12 @@ fn real_main() -> Result<i32> {
         )
         .get_matches();
 
-    let mut listing_output = ListingOutput::Find;
-    let content_output = if matches.is_present("list") {
-        ContentOutput::None
-    } else {
-        ContentOutput::Raw
-    };
-
-    if matches.is_present("no-listing") {
-        listing_output = ListingOutput::None;
-    }
-
-    if let Some(listing_format) = matches.value_of("headers") {
-        listing_output = match listing_format {
-            "none" => ListingOutput::None,
-            "capnp" => ListingOutput::Capnp,
-            "find" => ListingOutput::Find,
-            _ => unreachable!(),
-        }
-    }
+    let content_output = !matches.is_present("list");
 
     let options = Options {
-        listing_output,
         content_output,
         max_depth: matches.value_of("max-depth").unwrap().parse().unwrap(),
-        verbose: must_fit(matches.occurrences_of("v")),
+        verbose: must_fit(1 + matches.occurrences_of("verbose") - matches.occurrences_of("quiet")),
     };
 
     for path in matches.values_of("INPUT").unwrap() {

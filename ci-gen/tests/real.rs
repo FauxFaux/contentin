@@ -22,9 +22,7 @@ fn path_of(name: &str) -> PathBuf {
 
 fn run(name: &str) -> Vec<u8> {
     let mut gen = process::Command::new(path_of("ci-gen"))
-        .arg("-h")
         .current_dir(TEST_PATH)
-        .arg("capnp")
         .arg(name)
         .stdin(process::Stdio::null())
         .stdout(process::Stdio::piped())
