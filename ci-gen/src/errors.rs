@@ -20,6 +20,10 @@ error_chain! {
             description("bailin' out")
             display("rewind")
         }
+        RecoverableFailure(msg: String) {
+            description("a major problem, but we believe we can recover")
+            display("invalid format: {}", msg)
+        }
         UnsupportedFeature(msg: String) {
             description("format is (probably) legal, but we refuse to support its feature")
             display("unsupported feature: {}", msg)
@@ -71,6 +75,7 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
             return Some(FormatErrorType::Rewind);
         }
         ErrorKind::Tar(_) |
+        ErrorKind::RecoverableFailure(_) |
         ErrorKind::UnsupportedFeature(_) => {
             return Some(FormatErrorType::Other);
         }
