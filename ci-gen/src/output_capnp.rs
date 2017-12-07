@@ -1,4 +1,3 @@
-
 use std;
 use std::io;
 
@@ -12,7 +11,6 @@ pub fn write_capnp<W: io::Write>(
     content_output: bool,
     size: u64,
 ) -> io::Result<()> {
-
     let mut message = capnp::message::Builder::new_default();
     {
         let mut entry = message.init_root::<entry::Builder>();

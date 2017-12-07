@@ -105,16 +105,12 @@ fn main() {
             let out_dir = out_dir.clone();
             sender
                 .send(move || {
-
                     let hash = hash_compress_write_from_slice(&buf, &mut temp);
 
                     complete(temp, &hash, out_dir.as_str());
-
                 })
                 .expect("offloading");
-
         } else {
-
             let file_data = (&mut stdin).take(en.len);
             let (total_read, hash) = hash_compress_write_from_reader(file_data, &mut temp);
             assert_eq!(en.len, total_read);

@@ -65,7 +65,9 @@ impl TempFileTee {
 
         tmp.seek(BEGINNING)?;
 
-        Ok(Box::new(TempFileTee { inner: io::BufReader::new(tmp) }))
+        Ok(Box::new(TempFileTee {
+            inner: io::BufReader::new(tmp),
+        }))
     }
 }
 
@@ -74,9 +76,10 @@ const END: io::SeekFrom = io::SeekFrom::End(0);
 
 impl Tee for TempFileTee {
     fn reset(&mut self) -> Result<()> {
-        self.inner.seek(BEGINNING).map(|_| ()).chain_err(
-            || "resetting TempFileTee",
-        )
+        self.inner
+            .seek(BEGINNING)
+            .map(|_| ())
+            .chain_err(|| "resetting TempFileTee")
     }
 
     fn len_and_reset(&mut self) -> Result<u64> {
@@ -114,7 +117,9 @@ pub struct BufReaderTee<R: io::Read> {
 
 impl<R: io::Read> BufReaderTee<R> {
     pub fn new(from: R) -> Self {
-        BufReaderTee { inner: Box::new(io::BufReader::new(from)) }
+        BufReaderTee {
+            inner: Box::new(io::BufReader::new(from)),
+        }
     }
 }
 

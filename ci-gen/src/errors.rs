@@ -74,16 +74,12 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
         ErrorKind::Rewind => {
             return Some(FormatErrorType::Rewind);
         }
-        ErrorKind::Tar(_) |
-        ErrorKind::RecoverableFailure(_) |
-        ErrorKind::UnsupportedFeature(_) => {
+        ErrorKind::Tar(_) | ErrorKind::RecoverableFailure(_) | ErrorKind::UnsupportedFeature(_) => {
             return Some(FormatErrorType::Other);
         }
-        ErrorKind::Io(ref e) => {
-            if let Some(result) = is_io_format_error(e) {
-                return result;
-            }
-        }
+        ErrorKind::Io(ref e) => if let Some(result) = is_io_format_error(e) {
+            return result;
+        },
 
         ErrorKind::Ext4(_) => {
             return Some(FormatErrorType::Other);
@@ -109,13 +105,13 @@ fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
     }
 
     match e.kind() {
-        io::ErrorKind::InvalidData |
-        io::ErrorKind::InvalidInput |
-        io::ErrorKind::Other |
-        io::ErrorKind::UnexpectedEof => return Some(Some(FormatErrorType::Other)),
-        io::ErrorKind::BrokenPipe |
-        io::ErrorKind::NotFound |
-        io::ErrorKind::PermissionDenied => return Some(None),
+        io::ErrorKind::InvalidData
+        | io::ErrorKind::InvalidInput
+        | io::ErrorKind::Other
+        | io::ErrorKind::UnexpectedEof => return Some(Some(FormatErrorType::Other)),
+        io::ErrorKind::BrokenPipe | io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => {
+            return Some(None)
+        }
         _ => {}
     }
 

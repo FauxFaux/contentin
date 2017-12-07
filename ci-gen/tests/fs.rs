@@ -1,5 +1,5 @@
-extern crate crc;
 extern crate ci_capnp;
+extern crate crc;
 extern crate tempdir;
 
 use std::process;

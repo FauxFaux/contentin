@@ -96,8 +96,8 @@ impl Stat {
     }
 
     #[cfg(not(any(target_os = "android", target_os = "freebsd", target_os = "haiku",
-                      target_os = "ios", target_os = "linux", target_os = "netbsdosx",
-                      target_os = "solaris")))]
+                  target_os = "ios", target_os = "linux", target_os = "netbsdosx",
+                  target_os = "solaris")))]
     pub fn from(meta: &fs::Metadata) -> Stat {
         Stat {
             uid: 0,

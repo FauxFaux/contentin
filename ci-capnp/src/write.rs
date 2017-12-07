@@ -39,12 +39,10 @@ pub fn write_meta(meta: &::Meta, entry: &mut entry::Builder, size: u64) {
 
         use ItemType::*;
         match meta.item_type {
-            Unknown => {
-                match size {
-                    0 => type_.set_directory(()),
-                    _ => type_.set_normal(()),
-                }
-            }
+            Unknown => match size {
+                0 => type_.set_directory(()),
+                _ => type_.set_normal(()),
+            },
             RegularFile => type_.set_normal(()),
             Directory => type_.set_directory(()),
             Fifo => type_.set_fifo(()),

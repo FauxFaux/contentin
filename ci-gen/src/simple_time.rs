@@ -9,12 +9,9 @@ use stat;
 use errors::*;
 
 pub fn simple_time(dur: time::Duration) -> u64 {
-    dur.as_secs().checked_mul(1_000_000_000).map_or(
-        0,
-        |nanos| {
-            nanos + dur.subsec_nanos() as u64
-        },
-    )
+    dur.as_secs()
+        .checked_mul(1_000_000_000)
+        .map_or(0, |nanos| nanos + dur.subsec_nanos() as u64)
 }
 
 pub fn simple_time_sys(val: time::SystemTime) -> u64 {

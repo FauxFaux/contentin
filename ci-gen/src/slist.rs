@@ -36,7 +36,9 @@ impl<T: Clone> SList<T> {
     }
 
     pub fn iter(&self) -> SListIter<T> {
-        SListIter { next: Some(self.head.clone()) }
+        SListIter {
+            next: Some(self.head.clone()),
+        }
     }
 }
 

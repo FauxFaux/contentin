@@ -41,9 +41,15 @@ pub enum ItemType {
     /// A hardlink, with its destination.
     HardLink(String),
     /// A 'c' device.
-    CharacterDevice { major: u32, minor: u32 },
+    CharacterDevice {
+        major: u32,
+        minor: u32,
+    },
     /// A 'b' device.
-    BlockDevice { major: u32, minor: u32 },
+    BlockDevice {
+        major: u32,
+        minor: u32,
+    },
 }
 
 #[derive(Clone, Debug)]

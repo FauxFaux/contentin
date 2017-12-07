@@ -15,7 +15,7 @@ extern crate users;
 extern crate xz2;
 extern crate zip;
 
-use clap::{Arg, App};
+use clap::{App, Arg};
 use ci_capnp::Meta;
 
 use libflate::gzip;
@@ -58,12 +58,18 @@ fn must_fit(x: u64) -> u8 {
 
 fn real_main() -> Result<i32> {
     let matches = App::new("contentin")
-        .arg(Arg::with_name("verbose").short("v").multiple(true).help(
-            "Sets the level of verbosity (more for more)",
-        ))
-        .arg(Arg::with_name("quiet").short("q").multiple(true).help(
-            "Reduce the level of verbosity",
-        ))
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .multiple(true)
+                .help("Sets the level of verbosity (more for more)"),
+        )
+        .arg(
+            Arg::with_name("quiet")
+                .short("q")
+                .multiple(true)
+                .help("Reduce the level of verbosity"),
+        )
         .arg(
             Arg::with_name("list")
                 .short("t")
@@ -102,9 +108,8 @@ fn real_main() -> Result<i32> {
     };
 
     for path in matches.values_of("INPUT").unwrap() {
-        unpacker::process_real_path(path, &options).chain_err(|| {
-            format!("processing: '{}'", path)
-        })?;
+        unpacker::process_real_path(path, &options)
+            .chain_err(|| format!("processing: '{}'", path))?;
     }
 
     Ok(0)

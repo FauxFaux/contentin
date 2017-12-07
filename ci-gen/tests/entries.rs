@@ -1,5 +1,5 @@
-extern crate crc;
 extern crate ci_capnp;
+extern crate crc;
 
 use std::io;
 use std::process;
@@ -29,7 +29,6 @@ pub fn entries(name: &str) -> io::Result<Vec<TestEntry>> {
     {
         let mut out = prog.stdout.as_mut().unwrap();
         while let Some(entry) = ci_capnp::read_entry(&mut out).unwrap() {
-
             assert!(entry.content_follows);
 
             let mut limited = out.take(entry.len);

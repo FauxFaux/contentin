@@ -6,7 +6,7 @@ extern crate regex;
 use std::io;
 use std::process;
 
-use clap::{Arg, App, SubCommand};
+use clap::{App, Arg, SubCommand};
 
 use std::io::BufRead;
 use std::io::Read;
@@ -16,31 +16,25 @@ fn with_entries<R: io::Read, F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Resul
     mut from: &mut R,
     mut work: F,
 ) -> bool {
-
     loop {
         match ci_capnp::read_entry(&mut from) {
             Ok(None) => return true,
-            Ok(Some(entry)) => {
-                if let Err(e) = work(&mut from, &entry) {
-                    let _ = write!(
-                        io::stderr(),
-                        "fatal: command error while processing '{}': {}\n",
-                        join_backwards(&entry.paths, "/ /"),
-                        e
-                    );
+            Ok(Some(entry)) => if let Err(e) = work(&mut from, &entry) {
+                let _ = write!(
+                    io::stderr(),
+                    "fatal: command error while processing '{}': {}\n",
+                    join_backwards(&entry.paths, "/ /"),
+                    e
+                );
+                return false;
+            },
+            Err(e) => match e.kind {
+                capnp::ErrorKind::Failed => {
+                    let _ = write!(io::stderr(), "fatal: capnp failure parsing stream: {}\n", e);
                     return false;
                 }
-            }
-            Err(e) => {
-                match e.kind {
-                    capnp::ErrorKind::Failed => {
-                        let _ =
-                            write!(io::stderr(), "fatal: capnp failure parsing stream: {}\n", e);
-                        return false;
-                    }
-                    _ => panic!("unexpected capnp error return: {}", e),
-                }
-            }
+                _ => panic!("unexpected capnp error return: {}", e),
+            },
         }
     }
 }
@@ -58,11 +52,9 @@ fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> bool {
 
         for line in io::BufReader::new((&mut from).take(entry.len)).lines() {
             match line {
-                Ok(line) => {
-                    if regex.is_match(line.as_str()) {
-                        println!("{}:{}", paths, line);
-                    }
-                }
+                Ok(line) => if regex.is_match(line.as_str()) {
+                    println!("{}:{}", paths, line);
+                },
                 Err(e) => {
                     write!(io::stderr(), "skipping non-utf-8 ({}) file: {}\n", e, paths)?;
                 }
@@ -151,11 +143,13 @@ fn real_main() -> u8 {
     match App::new("contentin")
         .setting(clap::AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("cat"))
-        .subcommand(SubCommand::with_name("grep").arg(
-            Arg::with_name("pattern").required(true).help(
-                "pattern to search for",
+        .subcommand(
+            SubCommand::with_name("grep").arg(
+                Arg::with_name("pattern")
+                    .required(true)
+                    .help("pattern to search for"),
             ),
-        ))
+        )
         .subcommand(
             SubCommand::with_name("run")
                         .setting(clap::AppSettings::TrailingVarArg)
@@ -178,7 +172,8 @@ fn real_main() -> u8 {
                             .multiple(true)),
         )
         .get_matches()
-        .subcommand() {
+        .subcommand()
+    {
         ("cat", Some(_)) => {
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
@@ -189,11 +184,9 @@ fn real_main() -> u8 {
         ("grep", Some(matches)) => {
             let pattern = matches.value_of("pattern").unwrap();
             match regex::Regex::new(pattern) {
-                Ok(regex) => {
-                    if !grep(&mut from, &regex) {
-                        return 2;
-                    }
-                }
+                Ok(regex) => if !grep(&mut from, &regex) {
+                    return 2;
+                },
                 Err(e) => {
                     println!("invalid regex: {} {}", pattern, e);
                     return 2;

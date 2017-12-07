@@ -89,12 +89,10 @@ impl<'a> Unpacker<'a> {
         } else if meta.file_type().is_symlink() {
             match fs::read_link(path)?.to_str() {
                 Some(dest) => ItemType::SymbolicLink(dest.to_string()),
-                None => {
-                    bail!(ErrorKind::UnsupportedFeature(format!(
-                        "{} is a symlink to an invaild utf-8 sequence",
-                        path
-                    )))
-                }
+                None => bail!(ErrorKind::UnsupportedFeature(format!(
+                    "{} is a symlink to an invaild utf-8 sequence",
+                    path
+                ))),
             }
         } else if meta.is_file() {
             ItemType::RegularFile
@@ -111,17 +109,15 @@ impl<'a> Unpacker<'a> {
                     0b1000 => unreachable!(), // S_IFREG
                     0b1010 => unreachable!(), // S_IFLNK
 
-                    0b0001 => ItemType::Fifo, // S_IFIFO
+                    0b0001 => ItemType::Fifo,   // S_IFIFO
                     0b1100 => ItemType::Socket, // S_IFSOCK
 
                     0b0010 => panic!("TODO: char device"), // S_IFCHR
                     0b0110 => panic!("TODO: block device"), // S_IFBLK
 
-                    _ => {
-                        bail!(ErrorKind::UnsupportedFeature(
-                            format!("unrecognised unix mode type {:b}", mode_type),
-                        ))
-                    }
+                    _ => bail!(ErrorKind::UnsupportedFeature(
+                        format!("unrecognised unix mode type {:b}", mode_type),
+                    )),
                 }
             }
         };
@@ -204,8 +200,8 @@ impl<'a> Unpacker<'a> {
 
         for i in 0..zip.len() {
             let unpacker = {
-                let entry: zip::read::ZipFile =
-                    zip.by_index(i).chain_err(|| format!("opening entry {}", i))?;
+                let entry: zip::read::ZipFile = zip.by_index(i)
+                    .chain_err(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
                 unpacker.current.meta.mtime = simple_time_tm(entry.last_modified());
@@ -230,9 +226,9 @@ impl<'a> Unpacker<'a> {
             if self.is_format_error_result(&res)? {
                 let new_entry = zip.by_index(i)?;
                 let size = new_entry.size();
-                unpacker.complete_details(new_entry, size).chain_err(
-                    || "..after rollback",
-                )?;
+                unpacker
+                    .complete_details(new_entry, size)
+                    .chain_err(|| "..after rollback")?;
                 continue;
             }
 
@@ -252,16 +248,12 @@ impl<'a> Unpacker<'a> {
         let mut fs = ext4::SuperBlock::new_with_options(inner, &settings)
             .chain_err(|| "opening filesystem")?;
         let root = &fs.root().chain_err(|| "loading root")?;
-        fs.walk(
-            root,
-            "".to_string(),
-            &mut |fs, path, inode, enhanced| {
-                if let Err(e) = self.process_regular_inode(fs, inode, enhanced, path) {
-                    return Err(ext4::Error::with_chain(e, "reading file"));
-                }
-                Ok(true)
-            },
-        )?;
+        fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
+            if let Err(e) = self.process_regular_inode(fs, inode, enhanced, path) {
+                return Err(ext4::Error::with_chain(e, "reading file"));
+            }
+            Ok(true)
+        })?;
 
         Ok(())
     }
@@ -306,18 +298,14 @@ impl<'a> Unpacker<'a> {
                 ext4::Enhanced::Socket => ItemType::Socket,
                 ext4::Enhanced::Fifo => ItemType::Fifo,
                 ext4::Enhanced::SymbolicLink(ref dest) => ItemType::SymbolicLink(dest.to_string()),
-                ext4::Enhanced::CharacterDevice(major, minor) => {
-                    ItemType::CharacterDevice {
-                        major: major as u32,
-                        minor,
-                    }
-                }
-                ext4::Enhanced::BlockDevice(major, minor) => {
-                    ItemType::BlockDevice {
-                        major: major as u32,
-                        minor,
-                    }
-                }
+                ext4::Enhanced::CharacterDevice(major, minor) => ItemType::CharacterDevice {
+                    major: major as u32,
+                    minor,
+                },
+                ext4::Enhanced::BlockDevice(major, minor) => ItemType::BlockDevice {
+                    major: major as u32,
+                    minor,
+                },
             };
 
             current.meta.xattrs = inode.stat.xattrs.clone();
@@ -328,9 +316,9 @@ impl<'a> Unpacker<'a> {
                 // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
                 let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
                     .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
-                unpacker.unpack(tee).map_err(|e| {
-                    ext4::Error::with_chain(e, "unpacking")
-                })?;
+                unpacker
+                    .unpack(tee)
+                    .map_err(|e| ext4::Error::with_chain(e, "unpacking"))?;
             }
             _ => {
                 unpacker.complete_details(io::Cursor::new(&[]), 0)?;
@@ -399,10 +387,10 @@ impl<'a> Unpacker<'a> {
                     mode: header.mode()?,
                 };
 
-                current.meta.mtime =
-                    simple_time_epoch_seconds(header.mtime().map_err(tar_err).chain_err(
-                        || "reading mtime",
-                    )?);
+                current.meta.mtime = simple_time_epoch_seconds(header
+                    .mtime()
+                    .map_err(tar_err)
+                    .chain_err(|| "reading mtime")?);
             }
 
             unpacker
@@ -417,18 +405,16 @@ impl<'a> Unpacker<'a> {
     fn with_gzip(&self, header: &gzip::Header) -> Result<Unpacker> {
         let mtime = simple_time_epoch_seconds(header.modification_time() as u64);
         let name = match header.filename() {
-            Some(c_str) => {
-                c_str.to_str().map_err(|not_utf8| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!(
-                            "gzip member's name must be valid utf-8: {} {:?}",
-                            not_utf8,
-                            c_str.as_bytes()
-                        ),
-                    )
-                })?
-            }
+            Some(c_str) => c_str.to_str().map_err(|not_utf8| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "gzip member's name must be valid utf-8: {} {:?}",
+                        not_utf8,
+                        c_str.as_bytes()
+                    ),
+                )
+            })?,
             None => self.strip_compression_suffix(".gz"),
         };
 
@@ -456,9 +442,9 @@ impl<'a> Unpacker<'a> {
 
                     let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
                     (
-                        unpacker.unpack_or_die(&mut failing).chain_err(
-                            || "streaming gzip",
-                        ),
+                        unpacker
+                            .unpack_or_die(&mut failing)
+                            .chain_err(|| "streaming gzip"),
                         unpacker,
                     )
                 };
@@ -477,16 +463,12 @@ impl<'a> Unpacker<'a> {
             }
 
             // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
-            FileType::Xz => {
-                self.with_path(self.strip_compression_suffix(".xz"))
-                    .unpack_stream_xz(fd)
-                    .chain_err(|| "unpacking xz")
-            }
-            FileType::BZip2 => {
-                self.with_path(self.strip_compression_suffix(".bz2"))
-                    .unpack_stream_bz2(fd)
-                    .chain_err(|| "unpacking bz2")
-            }
+            FileType::Xz => self.with_path(self.strip_compression_suffix(".xz"))
+                .unpack_stream_xz(fd)
+                .chain_err(|| "unpacking xz"),
+            FileType::BZip2 => self.with_path(self.strip_compression_suffix(".bz2"))
+                .unpack_stream_bz2(fd)
+                .chain_err(|| "unpacking bz2"),
 
             FileType::Deb => {
                 use ar;
@@ -501,19 +483,14 @@ impl<'a> Unpacker<'a> {
                 Ok(())
             }
             FileType::Tar => self.process_tar(fd).chain_err(|| "unpacking tar"),
-            FileType::Zip => {
-                self.process_zip(fd.as_seekable()?).chain_err(
-                    || "reading zip file",
-                )
-            }
+            FileType::Zip => self.process_zip(fd.as_seekable()?)
+                .chain_err(|| "reading zip file"),
             FileType::Other => Err(ErrorKind::Rewind.into()),
             FileType::DiskImage => {
                 use bootsector;
                 let mut fd = fd.as_seekable()?;
-                for partition in bootsector::list_partitions(
-                    &mut fd,
-                    &bootsector::Options::default(),
-                )?
+                for partition in
+                    bootsector::list_partitions(&mut fd, &bootsector::Options::default())?
                 {
                     let unpacker = self.with_path(format!("p{}", partition.id).as_str());
                     let mut part_reader = bootsector::open_partition(&mut fd, &partition)?;
@@ -579,7 +556,6 @@ impl<'a> Unpacker<'a> {
     }
 
     fn is_format_error_result<T>(&self, res: &Result<T>) -> Result<bool> {
-
         let problem = classify_format_error_result(res);
 
         if let Some(specific) = problem {
@@ -636,12 +612,12 @@ pub fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Re
         return match unpacker.current.meta.item_type {
             ItemType::Directory => unreachable!(),
 
-            ItemType::SymbolicLink(_) |
-            ItemType::HardLink(_) |
-            ItemType::CharacterDevice { .. } |
-            ItemType::BlockDevice { .. } |
-            ItemType::Fifo |
-            ItemType::Socket => {
+            ItemType::SymbolicLink(_)
+            | ItemType::HardLink(_)
+            | ItemType::CharacterDevice { .. }
+            | ItemType::BlockDevice { .. }
+            | ItemType::Fifo
+            | ItemType::Socket => {
                 // can't actually read from these guys
                 unpacker.complete_details(io::Cursor::new(&[]), 0)
             }
