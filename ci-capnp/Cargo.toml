@@ -6,7 +6,7 @@ build = "build.rs"
 
 [dependencies]
 capnp = "0.8"
-peeky-read = "0.1"
+iowrap = "0.1"
 
 [build-dependencies]
 capnpc = "0.8"

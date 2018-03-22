@@ -11,7 +11,6 @@ use std::io;
 
 use sha2::Digest;
 
-use std::ascii::AsciiExt;
 use std::io::Read;
 use std::io::Write;
 
@@ -66,7 +65,6 @@ fn to_bytes(slice: &[u8]) -> [u8; 256 / 8] {
     hash.clone_from_slice(slice);
     hash
 }
-
 
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();

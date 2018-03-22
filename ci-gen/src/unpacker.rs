@@ -115,9 +115,10 @@ impl<'a> Unpacker<'a> {
                     0b0010 => panic!("TODO: char device"), // S_IFCHR
                     0b0110 => panic!("TODO: block device"), // S_IFBLK
 
-                    _ => bail!(ErrorKind::UnsupportedFeature(
-                        format!("unrecognised unix mode type {:b}", mode_type),
-                    )),
+                    _ => bail!(ErrorKind::UnsupportedFeature(format!(
+                        "unrecognised unix mode type {:b}",
+                        mode_type
+                    ),)),
                 }
             }
         };
@@ -337,9 +338,10 @@ impl<'a> Unpacker<'a> {
             let mut unpacker = {
                 let path = entry.path().map_err(tar_err)?;
                 let path = path.to_str().ok_or_else(|| {
-                    ErrorKind::UnsupportedFeature(
-                        format!("invalid path utf-8: {:?}", entry.path_bytes()),
-                    )
+                    ErrorKind::UnsupportedFeature(format!(
+                        "invalid path utf-8: {:?}",
+                        entry.path_bytes()
+                    ))
                 })?;
 
                 if "pax_global_header" == path {
@@ -395,9 +397,7 @@ impl<'a> Unpacker<'a> {
 
             unpacker
                 .unpack(TempFileTee::if_necessary(entry, &unpacker)?)
-                .chain_err(|| {
-                    format!("processing tar entry: {}", unpacker.current.path.inner())
-                })?;
+                .chain_err(|| format!("processing tar entry: {}", unpacker.current.path.inner()))?;
         }
         Ok(())
     }
@@ -423,7 +423,7 @@ impl<'a> Unpacker<'a> {
         Ok(unpacker)
     }
 
-    fn unpack_or_die<'b>(&self, mut fd: &mut Box<Tee + 'b>) -> Result<()> {
+    fn unpack_or_die<'b>(&self, fd: &mut Box<Tee + 'b>) -> Result<()> {
         if self.current.depth >= self.options.max_depth {
             bail!(ErrorKind::Rewind);
         }
@@ -448,7 +448,6 @@ impl<'a> Unpacker<'a> {
                         unpacker,
                     )
                 };
-
 
                 if self.is_format_error_result(&attempt)? {
                     fd.reset()?;
@@ -565,9 +564,7 @@ impl<'a> Unpacker<'a> {
                     self.log(1, || {
                         format!(
                             "thought we could unpack '{}' but we couldn't: {:?} {}",
-                            self.current.path,
-                            error,
-                            error
+                            self.current.path, error, error
                         )
                     })?;
                 }

@@ -26,10 +26,7 @@ fn dump(actual: &[TestEntry]) {
     for item in actual {
         println!(
             "{:?} {} {} {:?}",
-            item.entry.meta.item_type,
-            item.entry.len,
-            item.crc,
-            item.entry.paths
+            item.entry.meta.item_type, item.entry.len, item.crc, item.entry.paths
         );
     }
 }

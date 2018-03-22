@@ -21,7 +21,7 @@ pub struct TempFileTee {
     inner: io::BufReader<fs::File>,
 }
 
-pub fn read_all<R: io::Read>(mut reader: &mut R, mut buf: &mut [u8]) -> io::Result<usize> {
+pub fn read_all<R: io::Read>(mut reader: R, buf: &mut [u8]) -> io::Result<usize> {
     let mut pos = 0;
     loop {
         match reader.read(&mut buf[pos..]) {
@@ -44,9 +44,9 @@ impl TempFileTee {
         let mut buf = [0u8; MEM_LIMIT];
         let read = read_all(&mut from, &mut buf)?;
         if read < MEM_LIMIT {
-            return Ok(Box::new(
-                BufReaderTee::new(io::Cursor::new(buf[..read].to_vec())),
-            ));
+            return Ok(Box::new(BufReaderTee::new(io::Cursor::new(
+                buf[..read].to_vec(),
+            ))));
         }
 
         let mut tmp = tempfile()?;
@@ -259,8 +259,6 @@ where
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use tee;
@@ -294,7 +292,6 @@ mod tests {
         assert_eq!([1, 1, 1, 1, 1, 0, 0, 0], a);
     }
 
-
     #[test]
     fn repeated_read_over() {
         let mut r = Readie { limit: 2, len: 12 };
@@ -310,6 +307,5 @@ mod tests {
         assert_eq!(8, tee::read_all(&mut r, &mut a).expect("read"));
         assert_eq!([1, 2, 3, 4, 5, 6, 7, 8], a);
     }
-
 
 }

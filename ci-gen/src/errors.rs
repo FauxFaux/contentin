@@ -134,7 +134,6 @@ fn unsafe_staticify(err: &error::Error) -> &'static error::Error {
     unsafe { std::mem::transmute(err) }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,5 @@
 extern crate capnp;
-extern crate peeky_read;
+extern crate iowrap;
 
 use std::collections::HashMap;
 

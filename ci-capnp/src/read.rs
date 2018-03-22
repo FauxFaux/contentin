@@ -3,14 +3,14 @@ use std::io;
 use std::collections::HashMap;
 
 use capnp;
-use peeky_read::PeekyRead;
+use iowrap::Eof;
 
 use super::*;
 
-pub fn read_entry<'a, R: io::Read>(mut from: &mut R) -> capnp::Result<Option<FileEntry>> {
-    let mut from = PeekyRead::new(from);
+pub fn read_entry<'a, R: io::Read>(mut from: R) -> capnp::Result<Option<FileEntry>> {
+    let mut from = Eof::new(from);
 
-    if from.check_eof()? {
+    if from.eof()? {
         return Ok(None);
     }
 

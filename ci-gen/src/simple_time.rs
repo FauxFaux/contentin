@@ -20,7 +20,6 @@ pub fn simple_time_sys(val: time::SystemTime) -> u64 {
         .unwrap_or(0)
 }
 
-
 pub fn simple_time_tm(val: crates_time::Tm) -> u64 {
     let timespec = val.to_timespec();
     simple_time(time::Duration::new(

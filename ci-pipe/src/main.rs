@@ -135,7 +135,6 @@ fn join_backwards(what: &Vec<String>, join: &str) -> String {
     ret
 }
 
-
 fn real_main() -> u8 {
     let from = io::stdin();
     let mut from = from.lock();

@@ -28,12 +28,12 @@ fn main() {
     let drop_local_fs_details = matches.is_present("drop-local-fs-details");
 
     let input = io::stdin();
-    let mut input = &mut input.lock();
+    let mut input = input.lock();
 
     let mut all = Vec::new();
 
     loop {
-        let entry: FileEntry = match ci_capnp::read_entry(input).expect("reading heder") {
+        let entry: FileEntry = match ci_capnp::read_entry(&mut input).expect("reading heder") {
             Some(x) => x,
             None => break,
         };
@@ -41,7 +41,7 @@ fn main() {
         let mut crc = 0;
 
         if entry.content_follows {
-            let mut limited = input.take(entry.len);
+            let mut limited = (&mut input).take(entry.len);
             loop {
                 let mut buf = [0u8; 4096];
                 let found = limited.read(&mut buf).expect("reading data");

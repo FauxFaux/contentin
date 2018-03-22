@@ -34,7 +34,6 @@ pub fn write_capnp<W: io::Write>(
             }
         }
 
-
         ci_capnp::write_meta(&current.meta, &mut entry, size);
     }
     capnp::serialize::write_message(to, &message)
