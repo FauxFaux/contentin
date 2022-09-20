@@ -10,6 +10,6 @@ ci-capnp = { path = "../ci-capnp" }
 base32 = "0.4"
 lz4 = "1"
 num_cpus = "1"
-sha2 = "0.7"
+sha2 = "0.8"
 tempfile = "3"
 thread-pool = "0.1"

@@ -132,13 +132,13 @@ impl<'a> Unpacker<'a> {
                 user: Some(ci_capnp::PosixEntity {
                     id: u64::from(stat.uid),
                     name: users::get_user_by_uid(stat.uid)
-                        .map(|user| user.name().to_string())
+                        .and_then(|user| user.name().to_str().map(|s| s.to_string()))
                         .unwrap_or(String::new()),
                 }),
                 group: Some(ci_capnp::PosixEntity {
                     id: u64::from(stat.gid),
                     name: users::get_group_by_gid(stat.gid)
-                        .map(|group| group.name().to_string())
+                        .and_then(|group| group.name().to_str().map(|s| s.to_string()))
                         .unwrap_or(String::new()),
                 }),
                 mode: stat.mode,

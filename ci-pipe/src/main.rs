@@ -180,15 +180,16 @@ fn real_main() -> u8 {
         )
         .get_matches()
         .subcommand()
+        .expect("subcommand required")
     {
-        ("cat", Some(_)) => {
+        ("cat", _) => {
             let stdout = io::stdout();
             let mut stdout = stdout.lock();
             if !cat(&mut from, &mut stdout) {
                 return 2;
             }
         }
-        ("grep", Some(matches)) => {
+        ("grep", matches) => {
             let pattern = matches.value_of("pattern").unwrap();
             match regex::Regex::new(pattern) {
                 Ok(regex) => {
@@ -202,7 +203,7 @@ fn real_main() -> u8 {
                 }
             }
         }
-        ("run", Some(matches)) => {
+        ("run", matches) => {
             let raw_command: Vec<&str> = matches.values_of("command").unwrap().collect();
             let as_dumb_line = raw_command.join(" ");
 

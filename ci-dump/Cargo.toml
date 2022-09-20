@@ -9,7 +9,4 @@ edition = "2021"
 crc = "1"
 ci-capnp = { path = "../ci-capnp" }
 chrono = "0.4"
-
-[dependencies.clap]
-version = "2"
-default-features = false
+clap = "3"

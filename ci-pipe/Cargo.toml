@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 capnp = "0.13"
 ci-capnp = { path = "../ci-capnp" }
-clap = "2"
+clap = "3"
 regex = "1"
 tempfile = "3"
