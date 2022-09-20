@@ -1,6 +1,8 @@
 use std;
 use std::io;
 
+use anyhow::Result;
+
 use capnp;
 use ci_capnp;
 use ci_capnp::entry;
@@ -10,7 +12,7 @@ pub fn write_capnp<W: io::Write>(
     current: &crate::EntryBuilder,
     content_output: bool,
     size: u64,
-) -> Result<(), capnp::Error> {
+) -> Result<()> {
     let mut message = capnp::message::Builder::new_default();
     {
         let mut entry = message.init_root::<entry::Builder>();
@@ -34,7 +36,8 @@ pub fn write_capnp<W: io::Write>(
             }
         }
 
-        ci_capnp::write_meta(&current.meta, &mut entry, size);
+        ci_capnp::write_meta(&current.meta, &mut entry, size)?;
     }
-    capnp::serialize::write_message(to, &message)
+    capnp::serialize::write_message(to, &message)?;
+    Ok(())
 }

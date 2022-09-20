@@ -30,10 +30,8 @@ pub fn classify_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorTyp
     if let Some(e) = root_cause.downcast_ref::<ErrorKind>() {
         is_format_error(e)
     } else if root_cause.is::<zip::result::ZipError>() {
-        // This is just a copy-paste of is_format_error's Zip(_) => Other
         Some(FormatErrorType::Other)
-    } else if root_cause.is::<ext4::Error>() {
-        // see zip comment above
+    } else if root_cause.is::<ext4::ParseError>() {
         Some(FormatErrorType::Other)
     } else if let Some(e) = root_cause.downcast_ref::<io::Error>() {
         is_io_format_error(e).unwrap_or(None)
@@ -101,7 +99,10 @@ mod tests {
     #[test]
     fn real_format_error() {
         let failure = simulate_failure(true).with_context(|| "oops");
-        assert_eq!(classify_format_error_result(&failure).unwrap(), FormatErrorType::Other);
+        assert_eq!(
+            classify_format_error_result(&failure).unwrap(),
+            FormatErrorType::Other
+        );
     }
 
     #[test]

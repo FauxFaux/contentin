@@ -68,8 +68,7 @@ impl<'a> Unpacker<'a> {
             &self.current,
             self.options.content_output,
             size,
-        )
-        .expect("todo: anyhow");
+        )?;
 
         if self.options.content_output {
             let written = io::copy(&mut src, &mut stdout)?;
@@ -206,7 +205,7 @@ impl<'a> Unpacker<'a> {
                     .with_context(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
-                unpacker.current.meta.mtime = simple_time_tm(entry.last_modified());
+                unpacker.current.meta.mtime = simple_time_tm(entry.last_modified())?;
                 unpacker.current.meta.ownership = match entry.unix_mode() {
                     Some(mode) => ci_capnp::Ownership::Posix {
                         user: None,
@@ -254,11 +253,9 @@ impl<'a> Unpacker<'a> {
             .root()
             .map_err(|e| anyhow!("todo: anyhow {:?}", e))
             .with_context(|| "loading root")?;
-        fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
-            if let Err(e) = self.process_regular_inode(fs, inode, enhanced, path) {
-                todo!();
-                //return Err(ext4::Error::with_chain(e, "reading file"));
-            }
+        fs.walk(root, "", &mut |fs, path, inode, enhanced| {
+            self.process_regular_inode(fs, inode, enhanced, path)
+                .context("reading file")?;
             Ok(true)
         })
         .map_err(|e| anyhow!("todo: anyhow {:?}", e))?;
@@ -483,10 +480,8 @@ impl<'a> Unpacker<'a> {
                 let mut decoder = ar::Archive::new(fd);
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
-                    let unpacker = self.with_path(
-                        &String::from_utf8(entry.header().identifier().to_vec())
-                            .expect("todo: anyhow"),
-                    );
+                    let unpacker =
+                        self.with_path(&String::from_utf8(entry.header().identifier().to_vec())?);
                     unpacker
                         .unpack(TempFileTee::if_necessary(entry, &unpacker)?)
                         .with_context(|| {

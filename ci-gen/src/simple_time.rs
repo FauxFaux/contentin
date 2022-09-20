@@ -19,11 +19,11 @@ pub fn simple_time_sys(val: time::SystemTime) -> u64 {
         .unwrap_or(0)
 }
 
-pub fn simple_time_tm(val: zip::DateTime) -> u64 {
-    simple_time(time::Duration::new(
-        val.to_time().expect("todo: anyhow").unix_timestamp() as u64,
+pub fn simple_time_tm(val: zip::DateTime) -> Result<u64> {
+    Ok(simple_time(time::Duration::new(
+        val.to_time()?.unix_timestamp().try_into()?,
         0,
-    ))
+    )))
 }
 
 pub fn simple_time_btime(val: &fs::Metadata) -> Result<u64> {

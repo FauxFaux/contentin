@@ -1,10 +1,11 @@
+use anyhow::Result;
 use std;
 use std::convert::TryInto;
 
 use crate::entry;
 use crate::Ownership;
 
-pub fn write_meta(meta: &crate::Meta, entry: &mut entry::Builder, size: u64) {
+pub fn write_meta(meta: &crate::Meta, entry: &mut entry::Builder, size: u64) -> Result<()> {
     entry.set_atime(meta.atime);
     entry.set_mtime(meta.mtime);
     entry.set_ctime(meta.ctime);
@@ -18,12 +19,12 @@ pub fn write_meta(meta: &crate::Meta, entry: &mut entry::Builder, size: u64) {
             let mut posix = entry.reborrow().get_ownership().init_posix();
             if let &Some(ref user) = user {
                 let mut out = posix.reborrow().init_user();
-                out.set_id(user.id.try_into().expect("todo: uid fits"));
+                out.set_id(user.id.try_into()?);
                 out.set_name(user.name.as_str());
             }
             if let &Some(ref group) = group {
                 let mut out = posix.reborrow().init_group();
-                out.set_id(group.id.try_into().expect("todo: uid fits"));
+                out.set_id(group.id.try_into()?);
                 out.set_name(group.name.as_str());
             }
 
@@ -74,4 +75,6 @@ pub fn write_meta(meta: &crate::Meta, entry: &mut entry::Builder, size: u64) {
             row.set_value(&meta.xattrs[name]);
         }
     }
+
+    Ok(())
 }

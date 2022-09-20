@@ -87,12 +87,6 @@ checksum = "8a32fd6af2b5827bce66c29053ba0e7c42b9dcab01835835058558c10851a46b"
 
 [[package]]
 name = "bitflags"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4efd02e230a02e18f92fc2735f44597385ed02ad8f831e7c1c1156ee5e1ab3a5"
-
-[[package]]
-name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
@@ -203,6 +197,7 @@ dependencies = [
 name = "ci-capnp"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "capnp",
  "capnpc",
  "iowrap",
@@ -284,7 +279,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86447ad904c7fb335a790c9d7fe3d0d971dc523b8ccd1561a520de9a85302750"
 dependencies = [
  "atty",
- "bitflags 1.3.2",
+ "bitflags",
  "clap_lex",
  "indexmap",
  "strsim",
@@ -393,21 +388,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "error-chain"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9435d864e017c3c6afeac1654189b06cdb491cf2ff73dbf0d73b0f292f42ff8"
-
-[[package]]
 name = "ext4"
-version = "0.4.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88540b9fb9ee888b1cc1466ae51392c5667dddf696d0faa7d6c8ea7a68e27e1f"
+checksum = "5c3ccec9177b671bbef2f7d2e8e6f071886fd7f48a3a2077e296e293d22c3cae"
 dependencies = [
- "bitflags 0.9.1",
+ "anyhow",
+ "bitflags",
  "byteorder",
  "crc 1.8.1",
- "error-chain",
+ "thiserror",
 ]
 
 [[package]]
@@ -780,7 +770,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb5a58c1855b4b6819d59012155603f0b22ad30cad752600aadfcb695265519a"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
 ]
 
 [[package]]
