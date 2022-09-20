@@ -25,12 +25,12 @@ where
     let (mut hasher, lz4) = tools();
     let mut lz4 = lz4.build(to).expect("lz4 writer");
 
-    hasher.input(buf);
+    hasher.update(buf);
     lz4.write_all(buf).expect("lz4 writing");
     let (_, err) = lz4.finish();
     err.expect("lz4 done");
 
-    to_bytes(&hasher.result()[..])
+    to_bytes(&hasher.finalize()[..])
 }
 
 fn hash_compress_write_from_reader<R, W>(mut from: R, to: W) -> (u64, [u8; 256 / 8])
@@ -52,13 +52,13 @@ where
 
         total_read += read as u64;
 
-        hasher.input(&buf[0..read]);
+        hasher.update(&buf[0..read]);
         lz4.write_all(&buf[0..read]).expect("lz4 written");
     }
     let (_, result) = lz4.finish();
     result.expect("lz4 finished");
 
-    (total_read, to_bytes(&hasher.result()[..]))
+    (total_read, to_bytes(&hasher.finalize().as_slice()))
 }
 
 fn to_bytes(slice: &[u8]) -> [u8; 256 / 8] {
