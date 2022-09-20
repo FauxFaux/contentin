@@ -1,8 +1,3 @@
-extern crate chrono;
-extern crate ci_capnp;
-extern crate clap;
-extern crate crc;
-
 use std::io;
 
 use crc::crc32;

@@ -1,5 +1,3 @@
-extern crate diff;
-
 use std::fs;
 use std::process;
 

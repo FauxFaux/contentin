@@ -1,6 +1,3 @@
-extern crate ci_capnp;
-extern crate crc;
-
 use std::io;
 use std::process;
 

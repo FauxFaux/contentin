@@ -1,8 +1,3 @@
-extern crate capnp;
-extern crate ci_capnp;
-extern crate clap;
-extern crate regex;
-
 use std::io;
 use std::process;
 

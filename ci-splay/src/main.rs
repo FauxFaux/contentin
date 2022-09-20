@@ -1,11 +1,3 @@
-extern crate base32;
-extern crate ci_capnp;
-extern crate lz4;
-extern crate num_cpus;
-extern crate sha2;
-extern crate tempfile;
-extern crate thread_pool;
-
 use std::fs;
 use std::io;
 

@@ -1,6 +1,3 @@
-extern crate capnp;
-extern crate iowrap;
-
 use std::collections::HashMap;
 
 mod entry_capnp;
