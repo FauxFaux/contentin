@@ -80,7 +80,6 @@ impl<'a> Unpacker<'a> {
 
     fn from_file<'b>(path: &str, meta: fs::Metadata, options: &'b Options) -> Result<Unpacker<'b>> {
         use crate::stat::Stat;
-        use users;
 
         let stat: Stat = Stat::from(&meta);
 
@@ -196,7 +195,6 @@ impl<'a> Unpacker<'a> {
     where
         T: io::Read + io::Seek,
     {
-        use zip;
         let mut zip = zip::ZipArchive::new(from).chain_err(|| "opening zip")?;
 
         for i in 0..zip.len() {
@@ -331,7 +329,6 @@ impl<'a> Unpacker<'a> {
     }
 
     fn process_tar<'c>(&self, fd: &mut Box<dyn Tee + 'c>) -> Result<()> {
-        use tar;
         let mut decoder = tar::Archive::new(fd);
         for entry in decoder.entries()? {
             let entry = entry.map_err(tar_err).chain_err(|| "parsing header")?;
@@ -475,7 +472,6 @@ impl<'a> Unpacker<'a> {
                 .chain_err(|| "unpacking bz2"),
 
             FileType::Deb => {
-                use ar;
                 let mut decoder = ar::Archive::new(fd);
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
@@ -492,7 +488,6 @@ impl<'a> Unpacker<'a> {
                 .chain_err(|| "reading zip file"),
             FileType::Other => Err(ErrorKind::Rewind.into()),
             FileType::DiskImage => {
-                use bootsector;
                 let mut fd = fd.as_seekable()?;
                 for partition in
                     bootsector::list_partitions(&mut fd, &bootsector::Options::default())?
@@ -520,7 +515,6 @@ impl<'a> Unpacker<'a> {
 
     // TODO: Work out how to generic these copy-pastes
     fn unpack_stream_xz<'c>(&self, fd: &mut Box<dyn Tee + 'c>) -> Result<()> {
-        use xz2;
         let attempt = {
             let br = BoxReader { inner: fd };
             let mut failing: Box<dyn Tee> =
@@ -542,7 +536,6 @@ impl<'a> Unpacker<'a> {
 
     // TODO: copy-paste of unpack_stream_xz
     fn unpack_stream_bz2<'c>(&self, fd: &mut Box<dyn Tee + 'c>) -> Result<()> {
-        use bzip2;
         let attempt = {
             let br = BoxReader { inner: fd };
             let mut failing: Box<dyn Tee> =

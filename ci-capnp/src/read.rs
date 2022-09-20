@@ -7,7 +7,7 @@ use iowrap::Eof;
 
 use super::*;
 
-pub fn read_entry<'a, R: io::Read>(mut from: R) -> capnp::Result<Option<FileEntry>> {
+pub fn read_entry<'a, R: io::Read>(from: R) -> capnp::Result<Option<FileEntry>> {
     let mut from = Eof::new(from);
 
     if from.eof()? {

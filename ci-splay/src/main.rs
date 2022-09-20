@@ -27,7 +27,8 @@ where
 
     hasher.input(buf);
     lz4.write_all(buf).expect("lz4 writing");
-    lz4.finish();
+    let (_, err) = lz4.finish();
+    err.expect("lz4 done");
 
     to_bytes(&hasher.result()[..])
 }
