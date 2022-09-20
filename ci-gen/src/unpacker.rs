@@ -476,7 +476,10 @@ impl<'a> Unpacker<'a> {
                 let mut decoder = ar::Archive::new(fd);
                 while let Some(entry) = decoder.next_entry() {
                     let entry = entry?;
-                    let unpacker = self.with_path(entry.header().identifier());
+                    let unpacker = self.with_path(
+                        &String::from_utf8(entry.header().identifier().to_vec())
+                            .expect("todo: anyhow"),
+                    );
                     unpacker
                         .unpack(TempFileTee::if_necessary(entry, &unpacker)?)
                         .chain_err(|| format!("unpacking deb entry {}", unpacker.current.path))?;

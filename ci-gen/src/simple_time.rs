@@ -20,11 +20,10 @@ pub fn simple_time_sys(val: time::SystemTime) -> u64 {
         .unwrap_or(0)
 }
 
-pub fn simple_time_tm(val: crates_time::Tm) -> u64 {
-    let timespec = val.to_timespec();
+pub fn simple_time_tm(val: zip::DateTime) -> u64 {
     simple_time(time::Duration::new(
-        timespec.sec as u64,
-        timespec.nsec as u32,
+        val.to_time().expect("todo: anyhow").unix_timestamp() as u64,
+        0,
     ))
 }
 

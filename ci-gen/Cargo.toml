@@ -12,20 +12,20 @@ capnp = "0.14"
 clap = "3"
 
 # format support
-ar = "0.2"
+ar = "0.9"
 bootsector = "0.1"
 bzip2 = "0.4"
 ext4 = "0.4"
 libflate = "1"
 tar = "0.4"
 xz2 = "0.1.4"
-zip = "0.2"
+zip = "0.6"
 
 # general utilities
 error-chain = "0.10"
 users = "0.11"
 tempfile = "3"
-time = "0.1"
+time = "0.3"
 
 [build-dependencies]
 capnpc = "0.14"
