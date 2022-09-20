@@ -53,7 +53,7 @@ impl<'a> Unpacker<'a> {
         Ok(())
     }
 
-    fn complete(&self, mut file: Box<Tee>) -> Result<()> {
+    fn complete(&self, mut file: Box<dyn Tee>) -> Result<()> {
         let size = file.len_and_reset()?;
         self.complete_details(file, size)
     }
@@ -221,7 +221,7 @@ impl<'a> Unpacker<'a> {
 
             let res = {
                 let entry = zip.by_index(i)?;
-                let mut failing: Box<Tee> = Box::new(FailingTee::new(entry));
+                let mut failing: Box<dyn Tee> = Box::new(FailingTee::new(entry));
                 unpacker.unpack_or_die(&mut failing)
             };
 
@@ -330,7 +330,7 @@ impl<'a> Unpacker<'a> {
         Ok(())
     }
 
-    fn process_tar<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
+    fn process_tar<'c>(&self, fd: &mut Box<dyn Tee + 'c>) -> Result<()> {
         use tar;
         let mut decoder = tar::Archive::new(fd);
         for entry in decoder.entries()? {
@@ -426,7 +426,7 @@ impl<'a> Unpacker<'a> {
         Ok(unpacker)
     }
 
-    fn unpack_or_die<'b>(&self, fd: &mut Box<Tee + 'b>) -> Result<()> {
+    fn unpack_or_die<'b>(&self, fd: &mut Box<dyn Tee + 'b>) -> Result<()> {
         if self.current.depth >= self.options.max_depth {
             bail!(ErrorKind::Rewind);
         }
@@ -443,7 +443,7 @@ impl<'a> Unpacker<'a> {
 
                     let unpacker = self.with_gzip(dec.header())?;
 
-                    let mut failing: Box<Tee> = Box::new(FailingTee::new(dec));
+                    let mut failing: Box<dyn Tee> = Box::new(FailingTee::new(dec));
                     (
                         unpacker
                             .unpack_or_die(&mut failing)
@@ -501,7 +501,7 @@ impl<'a> Unpacker<'a> {
                     let mut part_reader = bootsector::open_partition(&mut fd, &partition)?;
 
                     let attempt = {
-                        let mut failing: Box<Tee> = Box::new(FailingTee::new(&mut part_reader));
+                        let mut failing: Box<dyn Tee> = Box::new(FailingTee::new(&mut part_reader));
                         unpacker.unpack_or_die(&mut failing)
                     };
 
@@ -519,11 +519,12 @@ impl<'a> Unpacker<'a> {
     }
 
     // TODO: Work out how to generic these copy-pastes
-    fn unpack_stream_xz<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
+    fn unpack_stream_xz<'c>(&self, fd: &mut Box<dyn Tee + 'c>) -> Result<()> {
         use xz2;
         let attempt = {
             let br = BoxReader { inner: fd };
-            let mut failing: Box<Tee> = Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(br)));
+            let mut failing: Box<dyn Tee> =
+                Box::new(FailingTee::new(xz2::bufread::XzDecoder::new(br)));
             self.unpack_or_die(&mut failing)
         };
 
@@ -540,11 +541,12 @@ impl<'a> Unpacker<'a> {
     }
 
     // TODO: copy-paste of unpack_stream_xz
-    fn unpack_stream_bz2<'c>(&self, fd: &mut Box<Tee + 'c>) -> Result<()> {
+    fn unpack_stream_bz2<'c>(&self, fd: &mut Box<dyn Tee + 'c>) -> Result<()> {
         use bzip2;
         let attempt = {
             let br = BoxReader { inner: fd };
-            let mut failing: Box<Tee> = Box::new(FailingTee::new(bzip2::read::BzDecoder::new(br)));
+            let mut failing: Box<dyn Tee> =
+                Box::new(FailingTee::new(bzip2::read::BzDecoder::new(br)));
             self.unpack_or_die(&mut failing)
         };
 
@@ -583,7 +585,7 @@ impl<'a> Unpacker<'a> {
         }
     }
 
-    fn unpack(&self, mut fd: Box<Tee>) -> Result<()> {
+    fn unpack(&self, mut fd: Box<dyn Tee>) -> Result<()> {
         let res = self.unpack_or_die(&mut fd).chain_err(|| "unpacking failed");
 
         if self.is_format_error_result(&res)? {

@@ -14,7 +14,7 @@ use std::io::Write;
 pub trait Tee: io::BufRead {
     fn reset(&mut self) -> Result<()>;
     fn len_and_reset(&mut self) -> Result<u64>;
-    fn as_seekable(&mut self) -> Result<&mut Seeker>;
+    fn as_seekable(&mut self) -> Result<&mut dyn Seeker>;
 }
 
 pub struct TempFileTee {
@@ -39,7 +39,7 @@ pub fn read_all<R: io::Read>(mut reader: R, buf: &mut [u8]) -> io::Result<usize>
 }
 
 impl TempFileTee {
-    pub fn if_necessary<U: io::Read>(mut from: U, log: &Unpacker) -> Result<Box<Tee>> {
+    pub fn if_necessary<U: io::Read>(mut from: U, log: &Unpacker) -> Result<Box<dyn Tee>> {
         const MEM_LIMIT: usize = 32 * 1024;
         let mut buf = [0u8; MEM_LIMIT];
         let read = read_all(&mut from, &mut buf)?;
@@ -88,7 +88,7 @@ impl Tee for TempFileTee {
         Ok(len)
     }
 
-    fn as_seekable(&mut self) -> Result<&mut Seeker> {
+    fn as_seekable(&mut self) -> Result<&mut dyn Seeker> {
         Ok(&mut self.inner)
     }
 }
@@ -140,7 +140,7 @@ where
         Ok(len)
     }
 
-    fn as_seekable(&mut self) -> Result<&mut Seeker> {
+    fn as_seekable(&mut self) -> Result<&mut dyn Seeker> {
         Ok(&mut *self.inner)
     }
 }
@@ -191,7 +191,7 @@ where
         ))
     }
 
-    fn as_seekable(&mut self) -> Result<&mut Seeker> {
+    fn as_seekable(&mut self) -> Result<&mut dyn Seeker> {
         let mut temp = tempfile()?;
         {
             let mut fd = io::BufWriter::new(&mut temp);
