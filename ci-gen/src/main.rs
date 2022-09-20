@@ -61,20 +61,20 @@ fn real_main() -> Result<i32> {
         .arg(
             Arg::with_name("verbose")
                 .short('v')
-                .multiple(true)
+                .multiple_occurrences(true)
                 .help("Sets the level of verbosity (more for more)"),
         )
         .arg(
             Arg::with_name("quiet")
                 .short('q')
-                .multiple(true)
+                .multiple_occurrences(true)
+                .takes_value(false)
                 .help("Reduce the level of verbosity"),
         )
         .arg(
             Arg::with_name("list")
                 .short('t')
                 .long("list")
-                .conflicts_with("to-command")
                 .help("Show headers only, not object content"),
         )
         .arg(
