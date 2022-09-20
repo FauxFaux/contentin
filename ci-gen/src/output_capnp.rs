@@ -18,7 +18,7 @@ pub fn write_capnp<W: io::Write>(
         entry.set_len(size);
 
         {
-            let mut paths = entry.borrow().init_paths(current.depth + 1);
+            let mut paths = entry.reborrow().init_paths(current.depth + 1);
             for (i, path) in current.path.iter().enumerate() {
                 assert!(i < std::u32::MAX as usize);
                 paths.set(i as u32, path.as_str());
@@ -26,7 +26,7 @@ pub fn write_capnp<W: io::Write>(
         }
 
         {
-            let mut content = entry.borrow().get_content();
+            let mut content = entry.reborrow().get_content();
             if content_output {
                 content.set_follows(());
             } else {
