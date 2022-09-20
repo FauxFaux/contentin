@@ -27,12 +27,7 @@ fn main() {
 
     let mut all = Vec::new();
 
-    loop {
-        let entry: FileEntry = match ci_capnp::read_entry(&mut input).expect("reading heder") {
-            Some(x) => x,
-            None => break,
-        };
-
+    while let Some(entry) = ci_capnp::read_entry(&mut input).expect("reading header") {
         let mut crc = 0;
 
         if entry.content_follows {

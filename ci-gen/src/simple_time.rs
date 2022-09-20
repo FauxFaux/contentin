@@ -5,7 +5,6 @@ use std::time;
 use anyhow::{Context, Result};
 
 use crate::stat;
-use ext4;
 
 pub fn simple_time(dur: time::Duration) -> u64 {
     dur.as_secs()

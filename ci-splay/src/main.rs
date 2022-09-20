@@ -50,7 +50,7 @@ where
     let (_, result) = lz4.finish();
     result.expect("lz4 finished");
 
-    (total_read, to_bytes(&hasher.finalize().as_slice()))
+    (total_read, to_bytes(hasher.finalize().as_slice()))
 }
 
 fn to_bytes(slice: &[u8]) -> [u8; 256 / 8] {

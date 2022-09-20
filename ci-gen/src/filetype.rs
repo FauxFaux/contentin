@@ -1,4 +1,3 @@
-use std;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,9 +44,9 @@ fn is_probably_tar(header: &[u8]) -> bool {
     }
 
     if let Some(expected) = read_octal(&header[148..156]) {
-        let found: u32 = header[0..148].into_iter().map(|x| *x as u32).sum::<u32>()
+        let found: u32 = header[0..148].iter().map(|x| *x as u32).sum::<u32>()
             + (b' ' as u32) * 8
-            + header[156..512].into_iter().map(|x| *x as u32).sum::<u32>();
+            + header[156..512].iter().map(|x| *x as u32).sum::<u32>();
 
         if expected == found {
             return true;
@@ -60,7 +59,7 @@ fn is_probably_tar(header: &[u8]) -> bool {
 const DEB_PREFIX: &[u8] = b"!<arch>\ndebian-binary ";
 
 impl FileType {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     pub fn identify(header: &[u8]) -> FileType {
         if header.len() >= 20
             && 0x1f == header[0] && 0x8b == header[1] {

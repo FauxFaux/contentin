@@ -1,4 +1,3 @@
-use std;
 use std::io;
 
 use anyhow::Result;
@@ -13,7 +12,7 @@ pub enum ErrorKind {
     UnsupportedFeature(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FormatErrorType {
     Rewind,
     Other,
@@ -29,9 +28,7 @@ pub fn classify_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorTyp
 
     if let Some(e) = root_cause.downcast_ref::<ErrorKind>() {
         is_format_error(e)
-    } else if root_cause.is::<zip::result::ZipError>() {
-        Some(FormatErrorType::Other)
-    } else if root_cause.is::<ext4::ParseError>() {
+    } else if root_cause.is::<zip::result::ZipError>() || root_cause.is::<ext4::ParseError>() {
         Some(FormatErrorType::Other)
     } else if let Some(e) = root_cause.downcast_ref::<io::Error>() {
         is_io_format_error(e).unwrap_or(None)
@@ -43,12 +40,8 @@ pub fn classify_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorTyp
 
 fn is_format_error(e: &ErrorKind) -> Option<FormatErrorType> {
     match e {
-        ErrorKind::Rewind => {
-            return Some(FormatErrorType::Rewind);
-        }
-        ErrorKind::UnsupportedFeature(_) => {
-            return Some(FormatErrorType::Other);
-        }
+        ErrorKind::Rewind => Some(FormatErrorType::Rewind),
+        ErrorKind::UnsupportedFeature(_) => Some(FormatErrorType::Other),
     }
 }
 

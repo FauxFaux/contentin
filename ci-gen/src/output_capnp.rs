@@ -1,10 +1,7 @@
-use std;
 use std::io;
 
 use anyhow::Result;
 
-use capnp;
-use ci_capnp;
 use ci_capnp::entry;
 
 pub fn write_capnp<W: io::Write>(

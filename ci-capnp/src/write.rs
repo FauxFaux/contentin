@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std;
 use std::convert::TryInto;
 
 use crate::entry;

@@ -2,12 +2,11 @@ use std::io;
 
 use std::collections::HashMap;
 
-use capnp;
 use iowrap::Eof;
 
 use super::*;
 
-pub fn read_entry<'a, R: io::Read>(from: R) -> capnp::Result<Option<FileEntry>> {
+pub fn read_entry<R: io::Read>(from: R) -> capnp::Result<Option<FileEntry>> {
     let mut from = Eof::new(from);
 
     if from.eof()? {
@@ -100,9 +99,9 @@ pub fn read_entry<'a, R: io::Read>(from: R) -> capnp::Result<Option<FileEntry>> 
         len: entry.get_len(),
         paths,
         meta,
-        content_follows: match entry.get_content().which()? {
-            entry::content::Which::Follows(()) => true,
-            _ => false,
-        },
+        content_follows: matches!(
+            entry.get_content().which()?,
+            entry::content::Which::Follows(())
+        ),
     }))
 }

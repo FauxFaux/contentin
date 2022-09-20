@@ -10,7 +10,6 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use crate::gzip;
 use crate::output_capnp;
-use ext4;
 
 use crate::errors::*;
 use crate::simple_time::*;
@@ -18,7 +17,6 @@ use crate::tee::*;
 
 use crate::Options;
 
-use ci_capnp;
 use ci_capnp::ItemType;
 use ci_capnp::Meta;
 
@@ -96,30 +94,28 @@ impl<'a> Unpacker<'a> {
             }
         } else if meta.is_file() {
             ItemType::RegularFile
+        } else if 0 == stat.mode {
+            // "mode" will be zero on platforms that don't do modes (i.e. Windows).
+            // TODO: detect symlinks (and DEVices) on Windows?
+            ItemType::Unknown
         } else {
-            if 0 == stat.mode {
-                // "mode" will be zero on platforms that don't do modes (i.e. Windows).
-                // TODO: detect symlinks (and DEVices) on Windows?
-                ItemType::Unknown
-            } else {
-                // TODO: use libc here, or assume the constants are the same everywhere?
-                let mode_type = (stat.mode >> 12) & 0b1111;
-                match mode_type {
-                    0b0100 => unreachable!(), // S_IFDIR
-                    0b1000 => unreachable!(), // S_IFREG
-                    0b1010 => unreachable!(), // S_IFLNK
+            // TODO: use libc here, or assume the constants are the same everywhere?
+            let mode_type = (stat.mode >> 12) & 0b1111;
+            match mode_type {
+                0b0100 => unreachable!(), // S_IFDIR
+                0b1000 => unreachable!(), // S_IFREG
+                0b1010 => unreachable!(), // S_IFLNK
 
-                    0b0001 => ItemType::Fifo,   // S_IFIFO
-                    0b1100 => ItemType::Socket, // S_IFSOCK
+                0b0001 => ItemType::Fifo,   // S_IFIFO
+                0b1100 => ItemType::Socket, // S_IFSOCK
 
-                    0b0010 => panic!("TODO: char device"), // S_IFCHR
-                    0b0110 => panic!("TODO: block device"), // S_IFBLK
+                0b0010 => panic!("TODO: char device"), // S_IFCHR
+                0b0110 => panic!("TODO: block device"), // S_IFBLK
 
-                    _ => bail!(ErrorKind::UnsupportedFeature(format!(
-                        "unrecognised unix mode type {:b}",
-                        mode_type
-                    ),)),
-                }
+                _ => bail!(ErrorKind::UnsupportedFeature(format!(
+                    "unrecognised unix mode type {:b}",
+                    mode_type
+                ),)),
             }
         };
 
@@ -133,13 +129,13 @@ impl<'a> Unpacker<'a> {
                     id: u64::from(stat.uid),
                     name: users::get_user_by_uid(stat.uid)
                         .and_then(|user| user.name().to_str().map(|s| s.to_string()))
-                        .unwrap_or(String::new()),
+                        .unwrap_or_default(),
                 }),
                 group: Some(ci_capnp::PosixEntity {
                     id: u64::from(stat.gid),
                     name: users::get_group_by_gid(stat.gid)
                         .and_then(|group| group.name().to_str().map(|s| s.to_string()))
-                        .unwrap_or(String::new()),
+                        .unwrap_or_default(),
                 }),
                 mode: stat.mode,
             },
@@ -233,9 +229,7 @@ impl<'a> Unpacker<'a> {
                 continue;
             }
 
-            if res.is_err() {
-                return res;
-            }
+            res?;
         }
         Ok(())
     }
@@ -244,8 +238,9 @@ impl<'a> Unpacker<'a> {
     where
         T: io::Read + io::Seek,
     {
-        let mut settings = ext4::Options::default();
-        settings.checksums = ext4::Checksums::Enabled;
+        let settings = ext4::Options {
+            checksums: ext4::Checksums::Enabled,
+        };
         let mut fs = ext4::SuperBlock::new_with_options(inner, &settings)
             .map_err(|e| anyhow!("todo: anyhow {:?}", e))
             .with_context(|| "opening filesystem")?;
@@ -367,7 +362,7 @@ impl<'a> Unpacker<'a> {
                         id: header.uid().with_context(|| "reading uid")?,
                         name: header
                             .username()
-                            .and_then(|x| Ok(x.unwrap_or("")))
+                            .map(|x| x.unwrap_or_default())
                             .map_err(|e| {
                                 ErrorKind::UnsupportedFeature(format!(
                                     "invalid username utf-8: {} {:?}",
@@ -381,7 +376,7 @@ impl<'a> Unpacker<'a> {
                         id: header.gid().with_context(|| "reading gid")?,
                         name: header
                             .groupname()
-                            .and_then(|x| Ok(x.unwrap_or("")))
+                            .map(|x| x.unwrap_or_default())
                             .map_err(|e| {
                                 ErrorKind::UnsupportedFeature(format!(
                                     "invalid groupname utf-8: {} {:?}",

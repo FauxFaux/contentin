@@ -50,10 +50,7 @@ impl<T: Clone> Iterator for SListIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next.is_none() {
-            return None;
-        }
-        let list = self.next.as_ref().unwrap().clone();
+        let list = self.next.as_ref()?.clone();
         self.next = list.next.clone();
         Some(list.value.clone())
     }

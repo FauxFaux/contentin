@@ -15,10 +15,10 @@ fn with_entries<R: io::Read, F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Resul
         match ci_capnp::read_entry(&mut from) {
             Ok(None) => return true,
             Ok(Some(entry)) => {
-                if let Err(e) = work(&mut from, &entry) {
-                    let _ = write!(
+                if let Err(e) = work(from, &entry) {
+                    let _ = writeln!(
                         io::stderr(),
-                        "fatal: command error while processing '{}': {}\n",
+                        "fatal: command error while processing '{}': {}",
                         join_backwards(&entry.paths, "/ /"),
                         e
                     );
@@ -27,7 +27,7 @@ fn with_entries<R: io::Read, F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Resul
             }
             Err(e) => match e.kind {
                 capnp::ErrorKind::Failed => {
-                    let _ = write!(io::stderr(), "fatal: capnp failure parsing stream: {}\n", e);
+                    let _ = writeln!(io::stderr(), "fatal: capnp failure parsing stream: {}", e);
                     return false;
                 }
                 _ => panic!("unexpected capnp error return: {}", e),
@@ -37,7 +37,7 @@ fn with_entries<R: io::Read, F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Resul
 }
 
 fn cat<R: io::Read, W: io::Write>(mut from: &mut R, to: &mut W) -> bool {
-    with_entries(&mut from, move |from, ref entry| {
+    with_entries(&mut from, move |from, entry| {
         assert_eq!(entry.len, copy_upto(from, to, entry.len)?);
         Ok(())
     })
@@ -55,7 +55,7 @@ fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> bool {
                     }
                 }
                 Err(e) => {
-                    write!(io::stderr(), "skipping non-utf-8 ({}) file: {}\n", e, paths)?;
+                    writeln!(io::stderr(), "skipping non-utf-8 ({}) file: {}", e, paths)?;
                 }
             }
         }
@@ -64,7 +64,7 @@ fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> bool {
     })
 }
 
-fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> bool {
+fn direct_run<R: io::Read>(mut from: &mut R, cmd: &[&str]) -> bool {
     with_entries(&mut from, move |mut from, entry| {
         // skip others; assuming they're empty
         match entry.meta.item_type {
@@ -85,7 +85,7 @@ fn direct_run<R: io::Read>(mut from: &mut R, cmd: &Vec<&str>) -> bool {
         let mut child = process::Command::new(cmd[0])
             .args(&cmd[1..])
             .env("TAR_REALNAME", join_backwards(&entry.paths, "/ /"))
-            .env("TAR_FILENAME", entry.paths[0].to_string())
+            .env("TAR_FILENAME", &entry.paths[0])
             .env("TAR_SIZE", format!("{}", entry.len))
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::inherit())
@@ -215,7 +215,7 @@ fn real_main() -> u8 {
         _ => unreachable!(),
     }
 
-    return 0;
+    0
 }
 
 fn main() {
