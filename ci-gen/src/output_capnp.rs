@@ -10,7 +10,7 @@ pub fn write_capnp<W: io::Write>(
     current: &crate::EntryBuilder,
     content_output: bool,
     size: u64,
-) -> io::Result<()> {
+) -> Result<(), capnp::Error> {
     let mut message = capnp::message::Builder::new_default();
     {
         let mut entry = message.init_root::<entry::Builder>();

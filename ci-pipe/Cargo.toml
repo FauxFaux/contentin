@@ -6,8 +6,8 @@ authors = ["Chris West (Faux) <git@goeswhere.com>"]
 edition = "2021"
 
 [dependencies]
-capnp = "0.12"
+capnp = "0.13"
 ci-capnp = { path = "../ci-capnp" }
 clap = "2"
-regex = "0.2"
-tempfile = "2"
+regex = "1"
+tempfile = "3"

@@ -67,7 +67,8 @@ impl<'a> Unpacker<'a> {
             &self.current,
             self.options.content_output,
             size,
-        )?;
+        )
+        .expect("todo: anyhow");
 
         if self.options.content_output {
             let written = io::copy(&mut src, &mut stdout)?;

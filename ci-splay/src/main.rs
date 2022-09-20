@@ -92,10 +92,7 @@ fn main() {
             continue;
         }
 
-        let mut temp = tempfile::NamedTempFileOptions::new()
-            .suffix(".tmp")
-            .create_in(&out_dir)
-            .expect("temp file");
+        let mut temp = tempfile::NamedTempFile::new_in(&out_dir).expect("temp file");
 
         if en.len < 16 * 1024 * 1024 {
             let mut buf = vec![0u8; en.len as usize];
