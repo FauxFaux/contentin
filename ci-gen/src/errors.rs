@@ -77,9 +77,11 @@ fn is_format_error(e: &Error) -> Option<FormatErrorType> {
         ErrorKind::Tar(_) | ErrorKind::RecoverableFailure(_) | ErrorKind::UnsupportedFeature(_) => {
             return Some(FormatErrorType::Other);
         }
-        ErrorKind::Io(ref e) => if let Some(result) = is_io_format_error(e) {
-            return result;
-        },
+        ErrorKind::Io(ref e) => {
+            if let Some(result) = is_io_format_error(e) {
+                return result;
+            }
+        }
 
         ErrorKind::Ext4(_) => {
             return Some(FormatErrorType::Other);
@@ -137,8 +139,8 @@ fn unsafe_staticify(err: &error::Error) -> &'static error::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io;
     use std::error::Error as Foo;
+    use std::io;
     use zip;
 
     fn simulate_failure(input: bool) -> zip::result::ZipResult<bool> {

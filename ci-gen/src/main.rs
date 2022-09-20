@@ -15,8 +15,8 @@ extern crate users;
 extern crate xz2;
 extern crate zip;
 
-use clap::{App, Arg};
 use ci_capnp::Meta;
+use clap::{App, Arg};
 
 use libflate::gzip;
 

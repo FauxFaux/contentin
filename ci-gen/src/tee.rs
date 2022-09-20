@@ -230,11 +230,7 @@ where
 
 pub trait Seeker: io::Seek + io::Read {}
 
-impl<R: io::Read> Seeker for io::BufReader<R>
-where
-    R: io::Seek,
-{
-}
+impl<R: io::Read> Seeker for io::BufReader<R> where R: io::Seek {}
 
 pub struct BoxReader<'a, R: io::Read + 'a> {
     pub inner: &'a mut R,
@@ -307,5 +303,4 @@ mod tests {
         assert_eq!(8, tee::read_all(&mut r, &mut a).expect("read"));
         assert_eq!([1, 2, 3, 4, 5, 6, 7, 8], a);
     }
-
 }

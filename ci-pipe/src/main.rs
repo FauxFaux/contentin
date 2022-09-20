@@ -19,15 +19,17 @@ fn with_entries<R: io::Read, F: FnMut(&mut R, &ci_capnp::FileEntry) -> io::Resul
     loop {
         match ci_capnp::read_entry(&mut from) {
             Ok(None) => return true,
-            Ok(Some(entry)) => if let Err(e) = work(&mut from, &entry) {
-                let _ = write!(
-                    io::stderr(),
-                    "fatal: command error while processing '{}': {}\n",
-                    join_backwards(&entry.paths, "/ /"),
-                    e
-                );
-                return false;
-            },
+            Ok(Some(entry)) => {
+                if let Err(e) = work(&mut from, &entry) {
+                    let _ = write!(
+                        io::stderr(),
+                        "fatal: command error while processing '{}': {}\n",
+                        join_backwards(&entry.paths, "/ /"),
+                        e
+                    );
+                    return false;
+                }
+            }
             Err(e) => match e.kind {
                 capnp::ErrorKind::Failed => {
                     let _ = write!(io::stderr(), "fatal: capnp failure parsing stream: {}\n", e);
@@ -52,9 +54,11 @@ fn grep<R: io::Read>(mut from: &mut R, regex: &regex::Regex) -> bool {
 
         for line in io::BufReader::new((&mut from).take(entry.len)).lines() {
             match line {
-                Ok(line) => if regex.is_match(line.as_str()) {
-                    println!("{}:{}", paths, line);
-                },
+                Ok(line) => {
+                    if regex.is_match(line.as_str()) {
+                        println!("{}:{}", paths, line);
+                    }
+                }
                 Err(e) => {
                     write!(io::stderr(), "skipping non-utf-8 ({}) file: {}\n", e, paths)?;
                 }
@@ -151,24 +155,28 @@ fn real_main() -> u8 {
         )
         .subcommand(
             SubCommand::with_name("run")
-                        .setting(clap::AppSettings::TrailingVarArg)
-                        .setting(clap::AppSettings::DontDelimitTrailingValues)
-                        .arg(Arg::with_name("sh")
-                            .long("sh")
-                            .help("Run with `sh -c`, and ssh-like quoting behaviour"))
-//                      .arg(Arg::with_name("command-failure")
-//                          .long("command-failure")
-//                          .takes_value(true)
-//                          .use_delimiter(false)
-//                          .default_value("fatal")
-//                          .possible_values(&[
-//                              "fatal",
-//                              "ignore",
-//                          ])
-                        .arg(Arg::with_name("command")
-                            .required(true)
-                            .help("Command to run, and its arguments")
-                            .multiple(true)),
+                .setting(clap::AppSettings::TrailingVarArg)
+                .setting(clap::AppSettings::DontDelimitTrailingValues)
+                .arg(
+                    Arg::with_name("sh")
+                        .long("sh")
+                        .help("Run with `sh -c`, and ssh-like quoting behaviour"),
+                )
+                //                      .arg(Arg::with_name("command-failure")
+                //                          .long("command-failure")
+                //                          .takes_value(true)
+                //                          .use_delimiter(false)
+                //                          .default_value("fatal")
+                //                          .possible_values(&[
+                //                              "fatal",
+                //                              "ignore",
+                //                          ])
+                .arg(
+                    Arg::with_name("command")
+                        .required(true)
+                        .help("Command to run, and its arguments")
+                        .multiple(true),
+                ),
         )
         .get_matches()
         .subcommand()
@@ -183,9 +191,11 @@ fn real_main() -> u8 {
         ("grep", Some(matches)) => {
             let pattern = matches.value_of("pattern").unwrap();
             match regex::Regex::new(pattern) {
-                Ok(regex) => if !grep(&mut from, &regex) {
-                    return 2;
-                },
+                Ok(regex) => {
+                    if !grep(&mut from, &regex) {
+                        return 2;
+                    }
+                }
                 Err(e) => {
                     println!("invalid regex: {} {}", pattern, e);
                     return 2;

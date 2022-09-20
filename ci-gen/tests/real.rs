@@ -3,8 +3,8 @@ extern crate diff;
 use std::fs;
 use std::process;
 
-use std::path::PathBuf;
 use std::io::Read;
+use std::path::PathBuf;
 
 const TEST_PATH: &str = "tests/real";
 

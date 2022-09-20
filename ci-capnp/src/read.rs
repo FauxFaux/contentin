@@ -85,8 +85,7 @@ pub fn read_entry<'a, R: io::Read>(mut from: R) -> capnp::Result<Option<FileEntr
                     major: numbers.get_major(),
                     minor: numbers.get_minor(),
                 }
-            }
-            // _ => ItemType::Unknown,
+            } // _ => ItemType::Unknown,
         },
         container: match entry.get_container().which()? {
             entry::container::Which::Unrecognised(()) => Container::Unrecognised,

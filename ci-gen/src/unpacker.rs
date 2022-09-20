@@ -1,6 +1,6 @@
-use std::io;
 use std::fmt;
 use std::fs;
+use std::io;
 use std::path;
 
 use std::collections::HashMap;
@@ -10,8 +10,8 @@ use gzip;
 use output_capnp;
 
 use errors::*;
-use tee::*;
 use simple_time::*;
+use tee::*;
 
 use Options;
 
@@ -201,7 +201,8 @@ impl<'a> Unpacker<'a> {
 
         for i in 0..zip.len() {
             let unpacker = {
-                let entry: zip::read::ZipFile = zip.by_index(i)
+                let entry: zip::read::ZipFile = zip
+                    .by_index(i)
                     .chain_err(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
@@ -389,10 +390,12 @@ impl<'a> Unpacker<'a> {
                     mode: header.mode()?,
                 };
 
-                current.meta.mtime = simple_time_epoch_seconds(header
-                    .mtime()
-                    .map_err(tar_err)
-                    .chain_err(|| "reading mtime")?);
+                current.meta.mtime = simple_time_epoch_seconds(
+                    header
+                        .mtime()
+                        .map_err(tar_err)
+                        .chain_err(|| "reading mtime")?,
+                );
             }
 
             unpacker
@@ -462,10 +465,12 @@ impl<'a> Unpacker<'a> {
             }
 
             // xz and bzip2 have *nothing* in their header; no mtime, no name, no source OS, no nothing.
-            FileType::Xz => self.with_path(self.strip_compression_suffix(".xz"))
+            FileType::Xz => self
+                .with_path(self.strip_compression_suffix(".xz"))
                 .unpack_stream_xz(fd)
                 .chain_err(|| "unpacking xz"),
-            FileType::BZip2 => self.with_path(self.strip_compression_suffix(".bz2"))
+            FileType::BZip2 => self
+                .with_path(self.strip_compression_suffix(".bz2"))
                 .unpack_stream_bz2(fd)
                 .chain_err(|| "unpacking bz2"),
 
@@ -482,7 +487,8 @@ impl<'a> Unpacker<'a> {
                 Ok(())
             }
             FileType::Tar => self.process_tar(fd).chain_err(|| "unpacking tar"),
-            FileType::Zip => self.process_zip(fd.as_seekable()?)
+            FileType::Zip => self
+                .process_zip(fd.as_seekable()?)
                 .chain_err(|| "reading zip file"),
             FileType::Other => Err(ErrorKind::Rewind.into()),
             FileType::DiskImage => {

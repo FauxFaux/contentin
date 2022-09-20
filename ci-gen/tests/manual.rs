@@ -45,7 +45,8 @@ fn check_simple(path: &str, extra_path_component: Option<&str>) {
     for i in 0..SIMPLE_EXPECTATIONS.len() {
         let exp = &SIMPLE_EXPECTATIONS[i];
         let act = &res[i];
-        let mut exp_paths = exp.paths
+        let mut exp_paths = exp
+            .paths
             .iter()
             .map(|x| x.to_string())
             .collect::<Vec<String>>();
