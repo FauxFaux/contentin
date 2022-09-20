@@ -5,7 +5,7 @@ extern crate tempdir;
 use std::process;
 
 mod entries;
-use entries::*;
+use crate::entries::*;
 
 use ci_capnp::ItemType;
 

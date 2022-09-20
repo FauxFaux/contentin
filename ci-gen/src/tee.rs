@@ -3,9 +3,9 @@ use std::io;
 
 use tempfile::tempfile;
 
-use unpacker::Unpacker;
+use crate::unpacker::Unpacker;
 
-use errors::*;
+use crate::errors::*;
 
 // magic
 use std::io::Seek;
@@ -257,7 +257,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use tee;
+    use crate::tee;
 
     use std::cmp::min;
     use std::io;

@@ -29,7 +29,7 @@ mod stat;
 mod tee;
 mod unpacker;
 
-use errors::*;
+use crate::errors::*;
 
 pub struct Options {
     content_output: bool,

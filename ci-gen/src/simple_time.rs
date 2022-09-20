@@ -2,11 +2,11 @@ use std::fs;
 use std::io;
 use std::time;
 
-use crates_time;
+use crate::crates_time;
+use crate::stat;
 use ext4;
-use stat;
 
-use errors::*;
+use crate::errors::*;
 
 pub fn simple_time(dur: time::Duration) -> u64 {
     dur.as_secs()

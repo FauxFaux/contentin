@@ -2,7 +2,7 @@ extern crate ci_capnp;
 extern crate crc;
 
 mod entries;
-use entries::*;
+use crate::entries::*;
 
 use ci_capnp::ItemType;
 

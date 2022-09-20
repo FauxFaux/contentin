@@ -5,30 +5,30 @@ use std::path;
 
 use std::collections::HashMap;
 
+use crate::gzip;
+use crate::output_capnp;
 use ext4;
-use gzip;
-use output_capnp;
 
-use errors::*;
-use simple_time::*;
-use tee::*;
+use crate::errors::*;
+use crate::simple_time::*;
+use crate::tee::*;
 
-use Options;
+use crate::Options;
 
 use ci_capnp;
 use ci_capnp::ItemType;
 use ci_capnp::Meta;
 
-use filetype::FileType;
+use crate::filetype::FileType;
 
-use slist::SList;
+use crate::slist::SList;
 
 use std::io::Seek;
 use std::io::Write;
 
 pub struct Unpacker<'a> {
     options: &'a Options,
-    current: ::EntryBuilder,
+    current: crate::EntryBuilder,
 }
 
 impl<'a> Unpacker<'a> {
@@ -79,7 +79,7 @@ impl<'a> Unpacker<'a> {
     }
 
     fn from_file<'b>(path: &str, meta: fs::Metadata, options: &'b Options) -> Result<Unpacker<'b>> {
-        use stat::Stat;
+        use crate::stat::Stat;
         use users;
 
         let stat: Stat = Stat::from(&meta);
@@ -151,7 +151,7 @@ impl<'a> Unpacker<'a> {
 
         Ok(Unpacker {
             options,
-            current: ::EntryBuilder {
+            current: crate::EntryBuilder {
                 depth: 0,
                 path: SList::head(path.to_string()),
                 meta,
@@ -174,7 +174,7 @@ impl<'a> Unpacker<'a> {
 
         Unpacker {
             options: self.options,
-            current: ::EntryBuilder {
+            current: crate::EntryBuilder {
                 path: self.current.path.plus(path.to_string()),
                 depth: self.current.depth + 1,
                 meta,

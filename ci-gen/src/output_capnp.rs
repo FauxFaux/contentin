@@ -7,7 +7,7 @@ use ci_capnp::entry;
 
 pub fn write_capnp<W: io::Write>(
     to: &mut W,
-    current: &::EntryBuilder,
+    current: &crate::EntryBuilder,
     content_output: bool,
     size: u64,
 ) -> io::Result<()> {

@@ -1,10 +1,10 @@
 use std;
 use std::convert::TryInto;
 
-use entry;
-use Ownership;
+use crate::entry;
+use crate::Ownership;
 
-pub fn write_meta(meta: &::Meta, entry: &mut entry::Builder, size: u64) {
+pub fn write_meta(meta: &crate::Meta, entry: &mut entry::Builder, size: u64) {
     entry.set_atime(meta.atime);
     entry.set_mtime(meta.mtime);
     entry.set_ctime(meta.ctime);
@@ -38,7 +38,7 @@ pub fn write_meta(meta: &::Meta, entry: &mut entry::Builder, size: u64) {
     {
         let mut type_ = entry.borrow().get_type();
 
-        use ItemType::*;
+        use crate::ItemType::*;
         match meta.item_type {
             Unknown => match size {
                 0 => type_.set_directory(()),

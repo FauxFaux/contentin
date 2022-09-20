@@ -8,9 +8,9 @@ mod read;
 mod write;
 
 /// The actual generated module for `Entry`:
-pub use entry_capnp::entry;
-pub use read::read_entry;
-pub use write::write_meta;
+pub use crate::entry_capnp::entry;
+pub use crate::read::read_entry;
+pub use crate::write::write_meta;
 
 #[derive(Clone, Debug)]
 pub struct PosixEntity {
