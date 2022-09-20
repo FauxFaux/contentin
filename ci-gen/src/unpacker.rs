@@ -130,13 +130,13 @@ impl<'a> Unpacker<'a> {
             btime: simple_time_btime(&meta)?,
             ownership: ci_capnp::Ownership::Posix {
                 user: Some(ci_capnp::PosixEntity {
-                    id: stat.uid,
+                    id: u64::from(stat.uid),
                     name: users::get_user_by_uid(stat.uid)
                         .map(|user| user.name().to_string())
                         .unwrap_or(String::new()),
                 }),
                 group: Some(ci_capnp::PosixEntity {
-                    id: stat.gid,
+                    id: u64::from(stat.gid),
                     name: users::get_group_by_gid(stat.gid)
                         .map(|group| group.name().to_string())
                         .unwrap_or(String::new()),
@@ -275,11 +275,11 @@ impl<'a> Unpacker<'a> {
             let stat: &ext4::Stat = &inode.stat;
             current.meta.ownership = ci_capnp::Ownership::Posix {
                 user: Some(ci_capnp::PosixEntity {
-                    id: stat.uid,
+                    id: u64::from(stat.uid),
                     name: String::new(),
                 }),
                 group: Some(ci_capnp::PosixEntity {
-                    id: stat.gid,
+                    id: u64::from(stat.gid),
                     name: String::new(),
                 }),
                 mode: stat.file_mode as u32,

@@ -237,6 +237,9 @@
    uid:   0
    gid:   0
    mode:  0o0644
+   xattrs:
+     security.capability: [1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0]
+     system.posix_acl_access: [1, 0, 0, 0, 1, 0, 6, 0, 2, 0, 4, 0, 8, 0, 0, 0, 4, 0, 4, 0, 16, 0, 4, 0, 32, 0, 4, 0]
  - paths:
           - /nonsense-symlink-file
           - p0
@@ -259,6 +262,8 @@
    uid:   0
    gid:   0
    mode:  0o0644
+   xattrs:
+     system.posix_acl_access: [1, 0, 0, 0, 1, 0, 6, 0, 2, 0, 4, 0, 254, 255, 0, 0, 4, 0, 4, 0, 16, 0, 4, 0, 32, 0, 4, 0]
  - paths:
           - /sock-file
           - p0

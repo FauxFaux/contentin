@@ -54,11 +54,11 @@ pub fn read_entry<'a, R: io::Read>(mut from: R) -> capnp::Result<Option<FileEntr
                 let group = tuple.get_group()?;
                 Ownership::Posix {
                     user: Some(PosixEntity {
-                        id: user.get_id(),
+                        id: u64::from(user.get_id()),
                         name: user.get_name()?.to_string(),
                     }),
                     group: Some(PosixEntity {
-                        id: group.get_id(),
+                        id: u64::from(group.get_id()),
                         name: group.get_name()?.to_string(),
                     }),
                     mode: tuple.get_mode(),

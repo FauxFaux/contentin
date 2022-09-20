@@ -14,7 +14,7 @@ pub use write::write_meta;
 
 #[derive(Clone, Debug)]
 pub struct PosixEntity {
-    pub id: u32,
+    pub id: u64,
     pub name: String,
 }
 
