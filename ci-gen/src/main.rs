@@ -60,26 +60,26 @@ fn real_main() -> Result<i32> {
     let matches = App::new("contentin")
         .arg(
             Arg::with_name("verbose")
-                .short("v")
+                .short('v')
                 .multiple(true)
                 .help("Sets the level of verbosity (more for more)"),
         )
         .arg(
             Arg::with_name("quiet")
-                .short("q")
+                .short('q')
                 .multiple(true)
                 .help("Reduce the level of verbosity"),
         )
         .arg(
             Arg::with_name("list")
-                .short("t")
+                .short('t')
                 .long("list")
                 .conflicts_with("to-command")
                 .help("Show headers only, not object content"),
         )
         .arg(
             Arg::with_name("max-depth")
-                .short("d")
+                .short('d')
                 .long("max-depth")
                 .takes_value(true)
                 .use_delimiter(false)
