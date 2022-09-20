@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
 build = "build.rs"
 
-edition = "2015"
+edition = "2021"
 
 [dependencies]
 capnp = "0.12"
