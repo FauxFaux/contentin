@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 # tool
 ci-capnp = { path = "../ci-capnp" }
-capnp = "0.10"
+capnp = "0.11"
 clap = "2"
 
 # format support
@@ -28,7 +28,7 @@ tempfile = "2"
 time = "0.1"
 
 [build-dependencies]
-capnpc = "0.10"
+capnpc = "0.11"
 
 [dev-dependencies]
 crc = "1"

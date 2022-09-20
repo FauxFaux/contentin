@@ -7,8 +7,8 @@ build = "build.rs"
 edition = "2015"
 
 [dependencies]
-capnp = "0.10"
+capnp = "0.11"
 iowrap = "0.1"
 
 [build-dependencies]
-capnpc = "0.10"
+capnpc = "0.11"
