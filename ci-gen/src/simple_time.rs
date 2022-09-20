@@ -2,10 +2,10 @@ use std::fs;
 use std::io;
 use std::time;
 
+use anyhow::{Context, Result};
+
 use crate::stat;
 use ext4;
-
-use crate::errors::*;
 
 pub fn simple_time(dur: time::Duration) -> u64 {
     dur.as_secs()
@@ -31,7 +31,7 @@ pub fn simple_time_btime(val: &fs::Metadata) -> Result<u64> {
         Ok(time) => Ok(simple_time_sys(time)),
         // "Other" is how "unsupported" is represented here; ew.
         Err(ref e) if e.kind() == io::ErrorKind::Other => Ok(0),
-        Err(other) => Err(other).chain_err(|| "loading btime"),
+        Err(other) => Err(other).with_context(|| "loading btime"),
     }
 }
 

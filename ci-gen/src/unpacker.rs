@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io;
+use std::io::Seek;
+use std::io::Write;
 use std::path;
 
-use std::collections::HashMap;
+use anyhow::{anyhow, bail, Context, Result};
 
 use crate::gzip;
 use crate::output_capnp;
@@ -21,10 +24,8 @@ use ci_capnp::Meta;
 
 use crate::filetype::FileType;
 
+use crate::errors::ErrorKind;
 use crate::slist::SList;
-
-use std::io::Seek;
-use std::io::Write;
 
 pub struct Unpacker<'a> {
     options: &'a Options,
@@ -196,13 +197,13 @@ impl<'a> Unpacker<'a> {
     where
         T: io::Read + io::Seek,
     {
-        let mut zip = zip::ZipArchive::new(from).chain_err(|| "opening zip")?;
+        let mut zip = zip::ZipArchive::new(from).with_context(|| "opening zip")?;
 
         for i in 0..zip.len() {
             let unpacker = {
                 let entry: zip::read::ZipFile = zip
                     .by_index(i)
-                    .chain_err(|| format!("opening entry {}", i))?;
+                    .with_context(|| format!("opening entry {}", i))?;
                 let mut unpacker = self.with_path(entry.name());
 
                 unpacker.current.meta.mtime = simple_time_tm(entry.last_modified());
@@ -229,7 +230,7 @@ impl<'a> Unpacker<'a> {
                 let size = new_entry.size();
                 unpacker
                     .complete_details(new_entry, size)
-                    .chain_err(|| "..after rollback")?;
+                    .with_context(|| "..after rollback")?;
                 continue;
             }
 
@@ -247,14 +248,20 @@ impl<'a> Unpacker<'a> {
         let mut settings = ext4::Options::default();
         settings.checksums = ext4::Checksums::Enabled;
         let mut fs = ext4::SuperBlock::new_with_options(inner, &settings)
-            .chain_err(|| "opening filesystem")?;
-        let root = &fs.root().chain_err(|| "loading root")?;
+            .map_err(|e| anyhow!("todo: anyhow {:?}", e))
+            .with_context(|| "opening filesystem")?;
+        let root = &fs
+            .root()
+            .map_err(|e| anyhow!("todo: anyhow {:?}", e))
+            .with_context(|| "loading root")?;
         fs.walk(root, "".to_string(), &mut |fs, path, inode, enhanced| {
             if let Err(e) = self.process_regular_inode(fs, inode, enhanced, path) {
-                return Err(ext4::Error::with_chain(e, "reading file"));
+                todo!();
+                //return Err(ext4::Error::with_chain(e, "reading file"));
             }
             Ok(true)
-        })?;
+        })
+        .map_err(|e| anyhow!("todo: anyhow {:?}", e))?;
 
         Ok(())
     }
@@ -315,11 +322,13 @@ impl<'a> Unpacker<'a> {
         match unpacker.current.meta.item_type {
             ItemType::RegularFile => {
                 // TODO: this should be a BufReaderTee, but BORROWS. HORRIBLE INEFFICIENCY
-                let tee = TempFileTee::if_necessary(fs.open(inode)?, &unpacker)
-                    .map_err(|e| ext4::Error::with_chain(e, "tee"))?;
-                unpacker
-                    .unpack(tee)
-                    .map_err(|e| ext4::Error::with_chain(e, "unpacking"))?;
+                let tee = TempFileTee::if_necessary(
+                    fs.open(inode)
+                        .map_err(|e| anyhow!("todo: anyhow {:?}", e))?,
+                    &unpacker,
+                )
+                .context("tee")?;
+                unpacker.unpack(tee).context("unpacking")?;
             }
             _ => {
                 unpacker.complete_details(io::Cursor::new(&[]), 0)?;
@@ -332,10 +341,10 @@ impl<'a> Unpacker<'a> {
     fn process_tar<'c>(&self, fd: &mut Box<dyn Tee + 'c>) -> Result<()> {
         let mut decoder = tar::Archive::new(fd);
         for entry in decoder.entries()? {
-            let entry = entry.map_err(tar_err).chain_err(|| "parsing header")?;
+            let entry = entry.with_context(|| "parsing header")?;
 
             let mut unpacker = {
-                let path = entry.path().map_err(tar_err)?;
+                let path = entry.path()?;
                 let path = path.to_str().ok_or_else(|| {
                     ErrorKind::UnsupportedFeature(format!(
                         "invalid path utf-8: {:?}",
@@ -358,7 +367,7 @@ impl<'a> Unpacker<'a> {
 
                 current.meta.ownership = ci_capnp::Ownership::Posix {
                     user: Some(ci_capnp::PosixEntity {
-                        id: header.uid().map_err(tar_err).chain_err(|| "reading uid")?,
+                        id: header.uid().with_context(|| "reading uid")?,
                         name: header
                             .username()
                             .and_then(|x| Ok(x.unwrap_or("")))
@@ -372,7 +381,7 @@ impl<'a> Unpacker<'a> {
                             .to_string(),
                     }),
                     group: Some(ci_capnp::PosixEntity {
-                        id: header.gid().map_err(tar_err).chain_err(|| "reading gid")?,
+                        id: header.gid().with_context(|| "reading gid")?,
                         name: header
                             .groupname()
                             .and_then(|x| Ok(x.unwrap_or("")))
@@ -388,17 +397,15 @@ impl<'a> Unpacker<'a> {
                     mode: header.mode()?,
                 };
 
-                current.meta.mtime = simple_time_epoch_seconds(
-                    header
-                        .mtime()
-                        .map_err(tar_err)
-                        .chain_err(|| "reading mtime")?,
-                );
+                current.meta.mtime =
+                    simple_time_epoch_seconds(header.mtime().with_context(|| "reading mtime")?);
             }
 
             unpacker
                 .unpack(TempFileTee::if_necessary(entry, &unpacker)?)
-                .chain_err(|| format!("processing tar entry: {}", unpacker.current.path.inner()))?;
+                .with_context(|| {
+                    format!("processing tar entry: {}", unpacker.current.path.inner())
+                })?;
         }
         Ok(())
     }
@@ -445,7 +452,7 @@ impl<'a> Unpacker<'a> {
                     (
                         unpacker
                             .unpack_or_die(&mut failing)
-                            .chain_err(|| "streaming gzip"),
+                            .with_context(|| "streaming gzip"),
                         unpacker,
                     )
                 };
@@ -466,11 +473,11 @@ impl<'a> Unpacker<'a> {
             FileType::Xz => self
                 .with_path(self.strip_compression_suffix(".xz"))
                 .unpack_stream_xz(fd)
-                .chain_err(|| "unpacking xz"),
+                .with_context(|| "unpacking xz"),
             FileType::BZip2 => self
                 .with_path(self.strip_compression_suffix(".bz2"))
                 .unpack_stream_bz2(fd)
-                .chain_err(|| "unpacking bz2"),
+                .with_context(|| "unpacking bz2"),
 
             FileType::Deb => {
                 let mut decoder = ar::Archive::new(fd);
@@ -482,14 +489,16 @@ impl<'a> Unpacker<'a> {
                     );
                     unpacker
                         .unpack(TempFileTee::if_necessary(entry, &unpacker)?)
-                        .chain_err(|| format!("unpacking deb entry {}", unpacker.current.path))?;
+                        .with_context(|| {
+                            format!("unpacking deb entry {}", unpacker.current.path)
+                        })?;
                 }
                 Ok(())
             }
-            FileType::Tar => self.process_tar(fd).chain_err(|| "unpacking tar"),
+            FileType::Tar => self.process_tar(fd).with_context(|| "unpacking tar"),
             FileType::Zip => self
                 .process_zip(fd.as_seekable()?)
-                .chain_err(|| "reading zip file"),
+                .with_context(|| "reading zip file"),
             FileType::Other => Err(ErrorKind::Rewind.into()),
             FileType::DiskImage => {
                 let mut fd = fd.as_seekable()?;
@@ -583,7 +592,9 @@ impl<'a> Unpacker<'a> {
     }
 
     fn unpack(&self, mut fd: Box<dyn Tee>) -> Result<()> {
-        let res = self.unpack_or_die(&mut fd).chain_err(|| "unpacking failed");
+        let res = self
+            .unpack_or_die(&mut fd)
+            .with_context(|| "unpacking failed");
 
         if self.is_format_error_result(&res)? {
             self.complete(fd)?;
@@ -637,12 +648,4 @@ pub fn process_real_path<P: AsRef<path::Path>>(path: P, options: &Options) -> Re
         process_real_path(path, options)?;
     }
     Ok(())
-}
-
-fn tar_err(e: io::Error) -> Error {
-    if io::ErrorKind::Other != e.kind() {
-        return Error::with_chain(e, "reading tar");
-    }
-
-    ErrorKind::Tar(format!("{}", e)).into()
 }

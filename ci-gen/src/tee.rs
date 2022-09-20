@@ -1,15 +1,14 @@
 use std::fs;
 use std::io;
-
-use tempfile::tempfile;
-
-use crate::unpacker::Unpacker;
-
-use crate::errors::*;
-
-// magic
 use std::io::Seek;
 use std::io::Write;
+
+use anyhow::Result;
+use anyhow::{bail, Context};
+use tempfile::tempfile;
+
+use crate::errors::ErrorKind;
+use crate::unpacker::Unpacker;
 
 pub trait Tee: io::BufRead {
     fn reset(&mut self) -> Result<()>;
@@ -79,7 +78,7 @@ impl Tee for TempFileTee {
         self.inner
             .seek(BEGINNING)
             .map(|_| ())
-            .chain_err(|| "resetting TempFileTee")
+            .with_context(|| "resetting TempFileTee")
     }
 
     fn len_and_reset(&mut self) -> Result<u64> {
@@ -131,7 +130,7 @@ where
         self.inner
             .seek(io::SeekFrom::Start(0))
             .map(|_| ())
-            .chain_err(|| "resetting BufReaderTee")
+            .with_context(|| "resetting BufReaderTee")
     }
 
     fn len_and_reset(&mut self) -> Result<u64> {

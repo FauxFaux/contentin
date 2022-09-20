@@ -1,23 +1,6 @@
-extern crate ar;
-extern crate bootsector;
-extern crate bzip2;
-extern crate capnp;
-extern crate ci_capnp;
-extern crate clap;
-#[macro_use]
-extern crate error_chain;
-extern crate ext4;
-extern crate libflate;
-extern crate tar;
-extern crate tempfile;
-extern crate time as crates_time;
-extern crate users;
-extern crate xz2;
-extern crate zip;
-
+use anyhow::{Context, Result};
 use ci_capnp::Meta;
 use clap::{App, Arg};
-
 use libflate::gzip;
 
 mod errors;
@@ -28,8 +11,6 @@ mod slist;
 mod stat;
 mod tee;
 mod unpacker;
-
-use crate::errors::*;
 
 pub struct Options {
     content_output: bool,
@@ -109,10 +90,12 @@ fn real_main() -> Result<i32> {
 
     for path in matches.values_of("INPUT").unwrap() {
         unpacker::process_real_path(path, &options)
-            .chain_err(|| format!("processing: '{}'", path))?;
+            .with_context(|| format!("processing: '{}'", path))?;
     }
 
     Ok(0)
 }
 
-quick_main!(real_main);
+fn main() -> Result<()> {
+    std::process::exit(real_main()?)
+}
