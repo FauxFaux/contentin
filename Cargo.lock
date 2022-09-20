@@ -178,15 +178,15 @@ dependencies = [
 
 [[package]]
 name = "capnp"
-version = "0.11.2"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "335afa96770a201bc1cbef4c294230c303a22d5209485af942f3b6acdbfe472a"
+checksum = "706dc7e15f69ff189608e09a6c78c8c7af55464377b3f7573524f32f1a23a6bf"
 
 [[package]]
 name = "capnpc"
-version = "0.11.1"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "904ee00982aa0b212550dfa09f76db5dea92000916c1cccbe826399d6a90fb23"
+checksum = "1097e1096b83f7b816f5d3917bcc530cc39b081d65b1dbd2641f39adc208a8c1"
 dependencies = [
  "capnp",
 ]
