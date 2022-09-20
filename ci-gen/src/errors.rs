@@ -1,8 +1,6 @@
 use std;
-use std::error;
 use std::io;
 
-use anyhow::Error;
 use anyhow::Result;
 
 #[derive(Debug, thiserror::Error)]
@@ -13,10 +11,6 @@ pub enum ErrorKind {
     /// format is (probably) legal, but we refuse to support its feature
     #[error("unsupported feature: {0}")]
     UnsupportedFeature(String),
-
-    /// a major problem, but we believe we can recover
-    #[error("invalid format: {0}")]
-    RecoverableFailure(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -26,61 +20,38 @@ pub enum FormatErrorType {
 }
 
 pub fn classify_format_error_result<T>(res: &Result<T>) -> Option<FormatErrorType> {
-    // if res.is_ok() {
-    return None;
-    // }
+    let error = match res {
+        Ok(_) => return None,
+        Err(err) => err,
+    };
 
-    // let error = res.as_ref().err().unwrap();
-    //
-    // let broken_ref = error.iter().last().unwrap();
-    //
-    // if let Some(e) = unsafe_staticify(broken_ref).downcast_ref::<Error>() {
-    //     is_format_error(e)
-    // } else if unsafe_staticify(broken_ref).is::<zip::result::ZipError>() {
-    //     // Most zip errors should be wrapped in an errors::Error,
-    //     // but https://github.com/brson/error-chain/issues/159
-    //
-    //     // This is just a copy-paste of is_format_error's Zip(_) => Other
-    //     Some(FormatErrorType::Other)
-    // } else if unsafe_staticify(broken_ref).is::<ext4::Error>() {
-    //     // see zip comment above
-    //     Some(FormatErrorType::Other)
-    // } else if let Some(e) = unsafe_staticify(broken_ref).downcast_ref::<io::Error>() {
-    //     is_io_format_error(e).unwrap_or(None)
-    // } else {
-    //     //            self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
-    //     None
-    // }
+    let root_cause = error.root_cause();
+
+    if let Some(e) = root_cause.downcast_ref::<ErrorKind>() {
+        is_format_error(e)
+    } else if root_cause.is::<zip::result::ZipError>() {
+        // This is just a copy-paste of is_format_error's Zip(_) => Other
+        Some(FormatErrorType::Other)
+    } else if root_cause.is::<ext4::Error>() {
+        // see zip comment above
+        Some(FormatErrorType::Other)
+    } else if let Some(e) = root_cause.downcast_ref::<io::Error>() {
+        is_io_format_error(e).unwrap_or(None)
+    } else {
+        //            self.log(1, || format!("unexpectedly failed to match an error type: {:?}", broken_ref))?;
+        None
+    }
 }
 
-fn is_format_error(e: &Error) -> Option<FormatErrorType> {
-    // match *e.kind() {
-    //     ErrorKind::Rewind => {
-    //         return Some(FormatErrorType::Rewind);
-    //     }
-    //     ErrorKind::Tar(_) | ErrorKind::RecoverableFailure(_) | ErrorKind::UnsupportedFeature(_) => {
-    //         return Some(FormatErrorType::Other);
-    //     }
-    //     ErrorKind::Io(ref e) => {
-    //         if let Some(result) = is_io_format_error(e) {
-    //             return result;
-    //         }
-    //     }
-    //
-    //     ErrorKind::Ext4(_) => {
-    //         return Some(FormatErrorType::Other);
-    //     }
-    //
-    //     ErrorKind::Zip(_) => {
-    //         return Some(FormatErrorType::Other);
-    //     }
-    //
-    //     ErrorKind::Msg(_) => {
-    //         return None;
-    //     }
-    // }
-
-    None
+fn is_format_error(e: &ErrorKind) -> Option<FormatErrorType> {
+    match e {
+        ErrorKind::Rewind => {
+            return Some(FormatErrorType::Rewind);
+        }
+        ErrorKind::UnsupportedFeature(_) => {
+            return Some(FormatErrorType::Other);
+        }
+    }
 }
 
 fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
@@ -104,27 +75,10 @@ fn is_io_format_error(e: &io::Error) -> Option<Option<FormatErrorType>> {
     None
 }
 
-/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-/// UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE UNSAFE
-///
-/// TODO: working around https://github.com/rust-lang/rust/issues/35943
-/// TODO: i.e. error.cause() is totally useless
-///
-/// This allows methods from the `Any` trait to be executed, e.g.
-/// `is::<>` `and downcast_ref::<>`. I recommend you run them immediately;
-/// i.e. don't even put the result of the method into a local.
-fn unsafe_staticify(err: &dyn error::Error) -> &'static dyn error::Error {
-    unsafe { std::mem::transmute(err) }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use anyhow::Context;
-    use std::error::Error as Foo;
     use std::io;
     use zip;
 
@@ -145,10 +99,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn real_format_error() {
         let failure = simulate_failure(true).with_context(|| "oops");
-        assert!(classify_format_error_result(&failure).unwrap() == FormatErrorType::Other);
+        assert_eq!(classify_format_error_result(&failure).unwrap(), FormatErrorType::Other);
     }
 
     #[test]
@@ -164,26 +117,10 @@ mod tests {
         assert!(classify_format_error_result(&failure).is_none())
     }
 
-    // #[test]
-    // fn chain_syntax_irrelevant() {
-    //     let literate = simulate_failure(true)
-    //         .with_context(|| "whoopsie")
-    //         .unwrap_err();
-    //     let explicit = Error::with_chain(simulate_failure(true).unwrap_err(), "whoopsie");
-    //
-    //     match literate.kind() {
-    //         &ErrorKind::Msg(_) => {}
-    //         _ => panic!(),
-    //     };
-    //     match explicit.kind() {
-    //         &ErrorKind::Msg(_) => {}
-    //         _ => panic!(),
-    //     }
-    //
-    //     let lit_cause = explicit.cause().unwrap();
-    //     assert!(unsafe_staticify(lit_cause).is::<zip::result::ZipError>());
-    //
-    //     let exp_cause = explicit.cause().unwrap();
-    //     assert!(unsafe_staticify(exp_cause).is::<zip::result::ZipError>());
-    // }
+    #[test]
+    fn chain_syntax_irrelevant() {
+        let explicit = simulate_failure(true).context("whoopsie").unwrap_err();
+        let exp_cause = explicit.source().unwrap();
+        assert!(exp_cause.is::<zip::result::ZipError>());
+    }
 }
